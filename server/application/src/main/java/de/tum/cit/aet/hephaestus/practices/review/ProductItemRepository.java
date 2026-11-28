@@ -102,13 +102,6 @@ public interface ProductItemRepository extends Repository<Review, UUID> {
             nativeQuery = true)
     List<Long> memberAccountIds(long ws, Collection<Long> ids);
 
-    /** {@link #memberAccountIds}, but none while the workspace shows admins results without names. */
-    @Query(
-            value = "SELECT m.account_id FROM membership m JOIN workspace w ON w.id = m.workspace_id"
-                    + " WHERE m.workspace_id=:ws AND m.account_id IN (:ids) AND w.per_person_results_for_admins",
-            nativeQuery = true)
-    List<Long> namedMemberAccountIds(long ws, Collection<Long> ids);
-
     interface ItemRow {
         long getId();
 

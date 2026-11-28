@@ -12,7 +12,6 @@ import type { ConsentStatus, CurrentUserView, WorkspaceMembership } from "@/api/
 import { isRecord } from "@/lib/is-record";
 import { clearAccountDeletedNoticeUnlessFor } from "@/runtime/auth/account-deleted-notice";
 import { QUERY_STALE_TIME_MS } from "@/runtime/tanstack-query/query-defaults";
-import { clearUserViewUnlessOperator, getUserViewSession } from "@/runtime/user-view/session";
 
 /** How long the identity read waits for an answer before the server counts as unreachable. */
 export const IDENTITY_READ_TIMEOUT_MS = 10_000;
@@ -49,16 +48,11 @@ export function currentUserQueryOptions() {
 			const { data, error, response } = await getCurrentUser({
 				signal: AbortSignal.timeout(IDENTITY_READ_TIMEOUT_MS),
 			});
-			// Every request waits for this identity, so a view left in the tab by another account, or
-			// by a session that has ended, is dropped here before any request can carry it. A deletion
-			// notice left by another account is dropped here too.
+			// Every request waits for this identity, so a deletion notice left in the tab by another
+			// account is dropped here before any page can show it.
 			if (data !== undefined && response?.ok === true) {
-				clearUserViewUnlessOperator(data.id);
 				clearAccountDeletedNoticeUnlessFor(String(data.id));
 				return data;
-			}
-			if (response !== undefined && !unreachableStatus(response.status)) {
-				clearUserViewUnlessOperator(undefined);
 			}
 			// The generated client's error body need not contain the actual HTTP status.
 			throw new Error("Could not verify your session.", { cause: response ?? error });
@@ -126,17 +120,10 @@ export const memberOnboardingGateOptions = (workspaceSlug: string) => ({
 	retry: false,
 });
 
-/**
- * Whether the workspace gate sends a member who has not finished setup to it. Owners must be able to
- * repair setup, and a user view never completes it: the saved choices belong to the signed-in account.
- */
+/** Whether the workspace gate sends a member who has not finished setup to it. Owners must be able to repair setup. */
 export function onboardingGateApplies(workspaceSlug: string, pathname: string): boolean {
 	const base = `/w/${encodeURIComponent(workspaceSlug)}`;
-	return (
-		getUserViewSession() === undefined &&
-		pathname !== `${base}/onboarding` &&
-		!pathname.startsWith(`${base}/admin`)
-	);
+	return pathname !== `${base}/onboarding` && !pathname.startsWith(`${base}/admin`);
 }
 
 async function startWorkspaceReads(

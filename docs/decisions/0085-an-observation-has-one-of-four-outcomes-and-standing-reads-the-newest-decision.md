@@ -6,7 +6,7 @@
 
 **Supersedes:** [ADR 0050](0050-one-practice-standard-one-outcome.md), [ADR 0056](0056-one-practice-model-for-items-and-scans.md), [ADR 0065](0065-standing-counts-the-newest-observation-of-each-item.md)
 
-**Amended by:** [ADR 0118](0118-a-workspace-keeps-its-practices-in-one-repository-and-a-trial-reviews-a-draft-practice-without-an-observation.md) (standing skips observations sealed in feedback mode Off)
+**Amended by:** [ADR 0118](0118-a-workspace-keeps-its-practices-in-one-repository-and-a-trial-reviews-a-draft-practice-without-an-observation.md) (standing skips observations sealed in feedback mode Off), [ADR 0167](0167-a-project-has-one-reviews-workflow.md) (proposed: one Reviews workflow)
 
 **Builds on:** [ADR 0055](0055-practice-scripts-use-one-result-contract.md), [ADR 0064](0064-one-evidence-contract-for-every-producer.md), [ADR 0070](0070-1-0-is-a-cutover-release.md)
 

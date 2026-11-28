@@ -2,6 +2,7 @@ import { addDays } from "date-fns";
 import type {
 	AccountRef,
 	EvidenceCitation,
+	FeedbackAnswer,
 	FeedbackBasis,
 	FeedbackCheck,
 	FeedbackCheckFacts,
@@ -9,7 +10,6 @@ import type {
 	FeedbackCopyCounts,
 	FeedbackDecision,
 	FeedbackDisagreement,
-	FeedbackAnswer,
 	FeedbackSend,
 	ItemEvent,
 	ItemFacts,
@@ -27,13 +27,14 @@ import type {
 	ReviewBoundFeedback,
 	ReviewBoundResult,
 	ReviewBucket,
+	ReviewCoverage,
 	ReviewDetail,
-	ReviewPerson,
 	ReviewFeedback,
 	ReviewFeedbackCounts,
 	ReviewFeedbackDetail,
 	ReviewJob,
 	ReviewOverview,
+	ReviewPerson,
 	ReviewPractice,
 	ReviewPracticeCounts,
 	ReviewProblem,
@@ -536,7 +537,6 @@ interface ResultSpec {
 	capturedAt?: string;
 	recordedAt: string;
 	item?: ItemRef;
-	aboutTheWork?: true;
 	/** Denied evidence hides text and citations without changing problem counts. */
 	evidenceHidden?: true;
 	unknownProof?: true;
@@ -559,7 +559,6 @@ interface ReviewSpec {
 	person: ReviewPerson | null;
 	origin?: ReviewSummary["origin"];
 	event?: string;
-	requestedBy?: AccountRef;
 	batchId?: string;
 	pending?: string[];
 	withheld?: { practiceSlug: string; reason: string }[];
@@ -1140,7 +1139,6 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 		startedAt: "2026-07-26T16:00:00Z",
 		person: grace,
 		origin: "REQUEST",
-		requestedBy: reviewAccounts.grace,
 		results: [
 			{
 				id: "eeeeeeee-3333-3333-3333-333333333333",
@@ -1543,7 +1541,6 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 		startedAt: "2026-07-27T20:00:00Z",
 		person: null,
 		origin: "REQUEST",
-		requestedBy: reviewAccounts.grace,
 		jobs: 4,
 		results: [
 			{
@@ -1555,7 +1552,6 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 				outcome: "NOT_MET",
 				recordedAt: "2026-07-27T20:12:00Z",
 				item: scannedFiles[0],
-				aboutTheWork: true,
 				problems: [
 					{
 						severity: "MAJOR",
@@ -1580,7 +1576,6 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 				outcome: "MET",
 				recordedAt: "2026-07-27T20:14:00Z",
 				item: scannedFiles[1],
-				aboutTheWork: true,
 			},
 		],
 		feedback: [],
@@ -1805,7 +1800,6 @@ function toResult(review: ReviewSpec, spec: ResultSpec): ReviewResult {
 		id: spec.id,
 		reviewId: review.id,
 		item: itemOf(review, spec),
-		person: spec.aboutTheWork === true ? null : review.person,
 		practiceSlug: spec.practiceSlug,
 		practiceName: practiceNameOf(spec.practiceSlug),
 		outcome: spec.outcome,
@@ -1833,7 +1827,6 @@ export function boundResultOf(result: ReviewBoundResult): ReviewBoundResult {
 		id: result.id,
 		reviewId: result.reviewId,
 		item: result.item,
-		person: result.person,
 		practiceSlug: result.practiceSlug,
 		practiceName: result.practiceName,
 		outcome: result.outcome,
@@ -1872,7 +1865,6 @@ function toProblemRows(review: ReviewSpec, spec: ResultSpec): ReviewProblem[] {
 			resultId: result.id,
 			reviewId: result.reviewId,
 			item: result.item,
-			person: result.person,
 			practiceSlug: result.practiceSlug,
 			practiceName: result.practiceName,
 			group: groupRefOf(result.practiceSlug),
@@ -2171,7 +2163,8 @@ function toFeedback(review: ReviewSpec, spec: FeedbackSpec): ReviewFeedback {
 		id: spec.id,
 		reviewId: review.id,
 		item: review.item,
-		person: developerOfFeedback(review),
+		// Only feedback on the work names its developer, as the work does (ADR 0125).
+		person: spec.destination === "ON_WORK" ? developerOfFeedback(review) : null,
 		destination: spec.destination,
 		state: spec.state,
 		stopReason: spec.stopReason ?? null,
@@ -2368,6 +2361,34 @@ const PRACTICE_STATUS_OF: Record<ReviewStatus, ReviewPractice["status"]> = {
 	CANCELLED: "FAILED",
 };
 
+function levelOf(review: ReviewSpec): ReviewPractice["level"] {
+	return (review.kind ?? "ITEM") === "SCAN" ? "MEMBER" : "ITEM";
+}
+
+/** The planned pairs of each practice level, summed only within it, as the server sums them. */
+export function coverageOf(practices: ReviewPractice[]): ReviewCoverage[] {
+	const byLevel = new Map<ReviewPractice["level"], ReviewCoverage["counts"]>();
+	for (const { level, itemCounts } of practices) {
+		const sum = byLevel.get(level) ?? {
+			listed: 0,
+			reviewed: 0,
+			reused: 0,
+			withheld: 0,
+			notReviewed: 0,
+		};
+		byLevel.set(level, {
+			listed: sum.listed + itemCounts.listed,
+			reviewed: sum.reviewed + itemCounts.reviewed,
+			reused: sum.reused + itemCounts.reused,
+			withheld: sum.withheld + itemCounts.withheld,
+			notReviewed: sum.notReviewed + itemCounts.notReviewed,
+		});
+	}
+	return [...byLevel.entries()]
+		.sort(([a], [b]) => a.localeCompare(b))
+		.map(([level, counts]) => ({ level, counts }));
+}
+
 function practicesOf(review: ReviewSpec): ReviewPractice[] {
 	const slugs = [
 		...new Set([...review.results.map((result) => result.practiceSlug), ...(review.pending ?? [])]),
@@ -2393,6 +2414,7 @@ function practicesOf(review: ReviewSpec): ReviewPractice[] {
 			},
 			results: resultCounts(results.map((result) => result.outcome)),
 			script: null,
+			level: levelOf(review),
 		};
 	});
 	const withheld = (review.withheld ?? []).map(({ practiceSlug, reason }): ReviewPractice => ({
@@ -2406,6 +2428,7 @@ function practicesOf(review: ReviewSpec): ReviewPractice[] {
 		itemCounts: { listed: 1, reviewed: 0, reused: 0, withheld: 1, notReviewed: 0 },
 		results: resultCounts([]),
 		script: null,
+		level: levelOf(review),
 	}));
 	return [...reviewed, ...withheld];
 }
@@ -2431,6 +2454,8 @@ function startedByOf(review: ReviewSpec): ItemEvent | null {
 
 function toReview(review: ReviewSpec): ReviewSummary {
 	const createdAt = new Date(review.startedAt);
+	const scan = (review.kind ?? "ITEM") === "SCAN";
+	const practices = practicesOf(review);
 	return {
 		id: review.id,
 		kind: review.kind ?? "ITEM",
@@ -2441,27 +2466,32 @@ function toReview(review: ReviewSpec): ReviewSummary {
 		progress: null,
 		stopReason: review.stopReason ?? null,
 		startedBy: startedByOf(review),
-		requestedBy: review.requestedBy ?? null,
 		batchId: review.batchId ?? null,
 		createdAt,
 		orderedAt: createdAt,
 		completedAt: finishedAt(review),
-		practices: practicesOf(review),
+		practices,
 		results: resultCounts(review.results.map((result) => result.outcome)),
 		feedback: feedbackCounts(review.feedback.map((item) => item.state)),
 		jobCount: review.jobs ?? 1,
 		activeJobCount: review.status === "RUNNING" || review.status === "QUEUED" ? 1 : 0,
 		model: MODEL,
+		// No review stores a setup or an audience yet: each reads as older (ADR 0167).
+		setup: null,
+		versionKind: scan ? "REPOSITORY_COMMIT" : "ITEM_REVISION",
+		audience: {
+			kind: scan || originOf(review) === "TRIAL" ? "OPERATIONAL" : "PERSONAL",
+			teamProjectId: null,
+		},
+		reviewedVersion: null,
+		coverage: coverageOf(practices),
+		change: null,
 	};
 }
 
 export const reviews: ReviewSummary[] = allReviews
 	.map(toReview)
 	.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
-export function reviewDeveloperOf(reviewId: string): ReviewPerson | null {
-	return allReviews.find((entry) => entry.id === reviewId)?.person ?? null;
-}
 
 export function reviewRefOf(review: ReviewSummary): ReviewRef {
 	return {
@@ -2557,6 +2587,7 @@ function detailOf(summary: ReviewSummary, jobs: ReviewJob[] | null): ReviewDetai
 		runtime: jobs === null ? null : { jobs },
 		usage: usageOf(jobs ?? []),
 		generatedPaths: null,
+		evidence: [],
 	};
 }
 
@@ -2595,6 +2626,7 @@ function standaloneReview(
 		results: resultCounts([]),
 		feedback: ZERO_FEEDBACK,
 		practices: [],
+		coverage: [],
 		...overrides,
 	};
 	const runtime = jobs(summary);
@@ -2999,7 +3031,6 @@ const queueItem = (
 	index: number,
 	state: "running" | "waiting" | "held",
 	item: ItemRef,
-	person: ReviewPerson | null,
 	minutes: number,
 ): ReviewQueueItem => ({
 	reviewId: `0c0c0c0c-0000-4000-8000-${String(index).padStart(12, "0")}`,
@@ -3008,17 +3039,16 @@ const queueItem = (
 	progress: null,
 	heldForBudget: state === "held",
 	item,
-	person,
 	since: minutesBefore(minutes),
 });
 
 export const reviewQueueHead = {
-	runningLong: queueItem(1, "running", reviewItem, ada, 3),
-	runningShort: queueItem(2, "running", gitlabMergeRequest, grace, 1),
-	waitingLong: queueItem(3, "waiting", webhookRetryPullRequest, alan, 4),
-	waitingShort: queueItem(4, "waiting", leagueColumnsPullRequest, katherine, 2),
-	waitingNew: queueItem(5, "waiting", invoiceBackfillMergeRequest, barbara, 1),
-	scanJob: queueItem(6, "held", scannedRepository, null, 1),
+	runningLong: queueItem(1, "running", reviewItem, 3),
+	runningShort: queueItem(2, "running", gitlabMergeRequest, 1),
+	waitingLong: queueItem(3, "waiting", webhookRetryPullRequest, 4),
+	waitingShort: queueItem(4, "waiting", leagueColumnsPullRequest, 2),
+	waitingNew: queueItem(5, "waiting", invoiceBackfillMergeRequest, 1),
+	scanJob: queueItem(6, "held", scannedRepository, 1),
 };
 
 export const idleReviewQueue: ReviewQueue = {

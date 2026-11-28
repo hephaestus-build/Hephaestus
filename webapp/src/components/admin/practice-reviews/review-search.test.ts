@@ -111,12 +111,12 @@ describe("practice review search", () => {
 	});
 
 	it("carries the time order to the next tab, but not the results list's own ordering", () => {
-		expect(carriedScope({ developerId: "7", order: "OLDEST" })).toStrictEqual({
-			developerId: "7",
+		expect(carriedScope({ from: "2026-09-01", order: "OLDEST" })).toStrictEqual({
+			from: "2026-09-01",
 			order: "OLDEST",
 		});
-		expect(carriedScope({ developerId: "7", order: "ACTIONABILITY" })).toStrictEqual({
-			developerId: "7",
+		expect(carriedScope({ from: "2026-09-01", order: "ACTIONABILITY" })).toStrictEqual({
+			from: "2026-09-01",
 		});
 	});
 
@@ -144,13 +144,11 @@ describe("practice review search", () => {
 	it("reads only a valid item id and UUID record ids", () => {
 		const search = problemsSearchSchema.parse({
 			itemId: "0",
-			developerId: "abc",
 			resultId: "not-a-uuid",
 			problemId: "0198f5a2-7c4e-7a10-8f3b-2d6c1e9a4b70",
 		});
 
 		expect(search.itemId).toBeUndefined();
-		expect(search.developerId).toBeUndefined();
 		expect(search.resultId).toBeUndefined();
 		expect(search.problemId).toBe("0198f5a2-7c4e-7a10-8f3b-2d6c1e9a4b70");
 	});

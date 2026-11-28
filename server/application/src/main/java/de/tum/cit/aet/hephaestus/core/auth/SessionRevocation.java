@@ -7,12 +7,14 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpClientGrantRepository;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountSessionRevocationContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -27,7 +29,9 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>It write-locks the account row before touching anything else. Every token issuance share-locks
  * that row first, so an issuance either commits before the revocation's statements run — which then see
  * its new token and revoke it — or waits and sees the revocation. Pending sign-in handoffs are burned,
- * installed-client sessions are ended, and issued tokens are revoked in the same transaction.
+ * installed-client sessions are ended, and issued tokens are revoked in the same transaction. Each
+ * {@link AccountSessionRevocationContributor} ends its own credentials there too, also when the caller keeps its own
+ * session: a host's team grant is never the caller's session (ADR 0166).
  */
 @ConditionalOnServerRole
 @Service
@@ -39,6 +43,7 @@ public class SessionRevocation {
     private final ClientSignInHandoffRepository handoffRepository;
     private final IssuedJwtRepository issuedJwtRepository;
     private final McpClientGrantRepository grantRepository;
+    private final List<AccountSessionRevocationContributor> contributors;
     private final Clock clock;
 
     public SessionRevocation(
@@ -47,6 +52,7 @@ public class SessionRevocation {
             ClientSignInHandoffRepository handoffRepository,
             IssuedJwtRepository issuedJwtRepository,
             McpClientGrantRepository grantRepository,
+            List<AccountSessionRevocationContributor> contributors,
             Clock clock,
             PrivacyJournal journal) {
         this.journal = journal;
@@ -55,6 +61,7 @@ public class SessionRevocation {
         this.handoffRepository = handoffRepository;
         this.issuedJwtRepository = issuedJwtRepository;
         this.grantRepository = grantRepository;
+        this.contributors = contributors;
         this.clock = ControlledClock.operationalClock(clock);
     }
 
@@ -90,6 +97,7 @@ public class SessionRevocation {
             journal.record(PrivacyJournalKind.SESSION_REVOKED, refs);
         }
         handoffRepository.consumeAllForAccount(accountId, now);
+        for (AccountSessionRevocationContributor contributor : contributors) contributor.revokeAll(accountId, now);
         if (exceptSessionId != null) {
             grantRepository.revokeAllForAccountExceptSession(accountId, exceptSessionId, now);
             clientSessionRepository.endAllForAccountExcept(accountId, exceptSessionId, now, reason);

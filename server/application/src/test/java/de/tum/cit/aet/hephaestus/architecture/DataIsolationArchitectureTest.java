@@ -138,6 +138,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "ProductFeedbackCleanup", // GitHub locators left after erasure; no person data
             "InstanceLlmSettings", // Instance LLM settings singleton (egress allowlist + BYO enable + default policy);
             // global
+            "PersonalModelAssignment", // The instance model for personal conversations, one per tier; global
             "CatalogEntry",
             "FxRate", // ECB daily reference rate for display-only conversion; a world fact, not tenant data
             // core.auth (ADR 0017) — identity is user/system-scoped, not workspace-scoped.
@@ -156,11 +157,16 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "IssuedJwt", // JWT revocation list; account-scoped
             "ClientSession", // Installed-client session (refresh family); account-scoped like IssuedJwt
             "ClientSignInHandoff", // Single-use installed-client sign-in code; precedes any workspace choice
+            "HostPairing", // An editor host's pairing request; precedes any workspace choice (ADR 0166)
             "JwtSigningKey", // System-wide signing keys
             "StoredSystemSecret", // Secrets that the instance generates for itself, sealed by the system key
             "SlackRequestClaim", // Slack request signatures, held 15 minutes, past the signature window
             "ProvenanceSigningKey", // Instance keys that sign the provenance records of generated text
             "AccountExport", // GDPR Art. 20 self-service export; account-scoped, spans workspaces
+            "MentorSource", // The personal mentor's intake rows: account-owned under row-level security
+            "MentorEvent",
+            "MentorRequest",
+            "SupportShare", // A person shares one turn with one instance admin; account-scoped (ADR 0164)
             "LoginProvider", // Instance-scoped OAuth login provider (sign-in option); not workspace-scoped
             "ConsentDecision", // Account-scoped consent evidence; spans workspaces
             "ProviderEventStep", // Owned by its provider event and deleted with it

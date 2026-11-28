@@ -99,6 +99,10 @@ class ArchitectureTest extends HephaestusArchitectureTest {
                     if (tail.equals("integration.outline") || tail.startsWith("integration.outline.")) {
                         return SliceIdentifier.of("integration-outline");
                     }
+                    // Submitted work has no provider connection and asks the project module who receives it.
+                    if (tail.equals("integration.submission") || tail.startsWith("integration.submission.")) {
+                        return SliceIdentifier.of("integration-submission");
+                    }
                     return dataPlatform.contains(top)
                             ? SliceIdentifier.of("scm-data-platform")
                             : SliceIdentifier.of(top);

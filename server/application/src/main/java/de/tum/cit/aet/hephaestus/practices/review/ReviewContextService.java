@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
-import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewContextDTO;
 import de.tum.cit.aet.hephaestus.workspace.authorization.WorkspaceAccessService;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
@@ -35,14 +34,13 @@ public class ReviewContextService {
             throw new IllegalArgumentException(MALFORMED_ADDRESS);
         var item = items.atUrl(workspaceId, url).orElseThrow(() -> new EntityNotFoundException(NO_WORK_AT_ADDRESS));
         var account = SecurityUtils.getCurrentAccountId().orElseThrow();
-        boolean activeUserView = UserViewContextHolder.get() != null;
-        boolean allowed = !activeUserView && requests.mayRequest(workspaceId, items.pin(item, null), account);
+        boolean allowed = requests.mayRequest(workspaceId, items.pin(item, null), account);
         return new ReviewContextDTO(
                 Long.toString(workspaceId),
                 workspaces.findById(workspaceId).orElseThrow().slug(),
                 references.items(workspaceId, List.of(item.itemId())).get(item.itemId()),
                 allowed,
-                !activeUserView && access.isAdmin(),
+                access.isAdmin(),
                 allowed ? null : "Only the author or an assignee, or a workspace admin, can request this review.");
     }
 }

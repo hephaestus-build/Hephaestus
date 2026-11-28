@@ -32,4 +32,7 @@ public record ReviewScheduleDTO(
         AccountRefDTO createdBy,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant createdAt,
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant updatedAt) {}
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant updatedAt,
+
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
+        UUID setupId) {}

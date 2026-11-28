@@ -31,14 +31,3 @@ export const PracticesOff: Story = {
 		await expect(canvas.getByRole("link", { name: "Workspace activity" })).toBeVisible();
 	},
 };
-
-/** A read-only user view lists no Practices across the workspace: the server refuses it there. */
-export const ReadOnlyUserView: Story = {
-	args: { readOnly: true },
-	play: async ({ canvas }) => {
-		await expect(
-			canvas.queryByRole("link", { name: "Practices across the workspace" }),
-		).not.toBeInTheDocument();
-		await expect(canvas.getByRole("link", { name: "Workspace activity" })).toBeVisible();
-	},
-};

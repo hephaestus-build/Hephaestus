@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
-import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.response.FeedbackResponse;
@@ -38,7 +37,6 @@ public class FeedbackResponseService {
 
     public FeedbackResponseDTO replaceResponse(
             WorkspaceContext workspace, UUID feedbackId, FeedbackResponseRequestDTO request) {
-        requireActualDeveloper();
         return respond(
                 workspace.id(),
                 feedbackId,
@@ -76,7 +74,6 @@ public class FeedbackResponseService {
     }
 
     public FeedbackResponseDTO deleteResponse(WorkspaceContext workspace, UUID feedbackId) {
-        requireActualDeveloper();
         long developerId = currentDeveloperLookup.currentDeveloperIdElseThrow();
         requireWritable(developerId);
         requireShown(workspace.id(), feedbackId, developerId, true);
@@ -143,11 +140,5 @@ public class FeedbackResponseService {
         if (resolution == FeedbackResolution.DISAGREE && (comment == null || comment.isBlank())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Add a comment to explain your disagreement.");
         }
-    }
-
-    private static void requireActualDeveloper() {
-        if (UserViewContextHolder.get() != null)
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "You cannot change feedback while viewing another account.");
     }
 }

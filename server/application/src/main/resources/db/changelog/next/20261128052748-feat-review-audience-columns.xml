@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795835723604-1" author="hephaestus">
+        <comment>What a review pinned, who reads it, and the setup that started it (ADR 0167 decision 2). Nullable, and nothing writes them yet: a review without them reads as operational if it is a scan or a trial, and as personal otherwise.</comment>
+        <addColumn tableName="review">
+            <column name="setup_id" type="UUID"/>
+            <column name="version_kind" type="VARCHAR(24)"/>
+            <column name="audience" type="VARCHAR(16)"/>
+            <column name="audience_team_id" type="UUID"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1795835723604-2" author="hephaestus">
+        <comment>The values and how they pair: a team audience names its team project and no other audience names one, the audience and the kind of version come together, and only a scan pins a repository commit. NOT VALID here and validated in the next change set, so that no lock on review waits for a scan of every row. The setup key keeps tenancy and leaves the review when its setup goes.</comment>
+        <sql>
+ALTER TABLE public.review ADD CONSTRAINT ck_review_version_kind CHECK (version_kind IN ('REPOSITORY_COMMIT', 'SUBMITTED_VERSION', 'ITEM_REVISION')) NOT VALID;
+ALTER TABLE public.review ADD CONSTRAINT ck_review_audience CHECK (audience IN ('OPERATIONAL', 'TEAM', 'PERSONAL')) NOT VALID;
+ALTER TABLE public.review ADD CONSTRAINT ck_review_audience_team CHECK ((audience_team_id IS NULL) = (audience IS DISTINCT FROM 'TEAM')) NOT VALID;
+ALTER TABLE public.review ADD CONSTRAINT ck_review_audience_version_kind CHECK ((audience IS NULL) = (version_kind IS NULL)) NOT VALID;
+ALTER TABLE public.review ADD CONSTRAINT ck_review_version_kind_scan CHECK (version_kind IS NULL OR (kind = 'SCAN') = (version_kind = 'REPOSITORY_COMMIT')) NOT VALID;
+ALTER TABLE public.review ADD CONSTRAINT sfk_review_setup FOREIGN KEY (setup_id, workspace_id) REFERENCES public.review_setup (id, workspace_id) ON DELETE SET NULL (setup_id) NOT VALID;
+        </sql>
+        <rollback>
+ALTER TABLE public.review DROP CONSTRAINT sfk_review_setup;
+ALTER TABLE public.review DROP CONSTRAINT ck_review_version_kind_scan;
+ALTER TABLE public.review DROP CONSTRAINT ck_review_audience_version_kind;
+ALTER TABLE public.review DROP CONSTRAINT ck_review_audience_team;
+ALTER TABLE public.review DROP CONSTRAINT ck_review_audience;
+ALTER TABLE public.review DROP CONSTRAINT ck_review_version_kind;
+        </rollback>
+    </changeSet>
+    <changeSet id="1795835723604-3" author="hephaestus">
+        <comment>Every existing row has none of the new values, so each check holds. Validation reads the rows under a lock that lets writes run.</comment>
+        <sql>
+ALTER TABLE public.review VALIDATE CONSTRAINT ck_review_version_kind;
+ALTER TABLE public.review VALIDATE CONSTRAINT ck_review_audience;
+ALTER TABLE public.review VALIDATE CONSTRAINT ck_review_audience_team;
+ALTER TABLE public.review VALIDATE CONSTRAINT ck_review_audience_version_kind;
+ALTER TABLE public.review VALIDATE CONSTRAINT ck_review_version_kind_scan;
+ALTER TABLE public.review VALIDATE CONSTRAINT sfk_review_setup;
+        </sql>
+        <!-- Validation adds nothing that the rollback of the change set before it does not drop. -->
+        <rollback><sql>SELECT 1;</sql></rollback>
+    </changeSet>
+    <changeSet id="1795835723604-4" author="hephaestus">
+        <comment>For every writer: the team of a team audience is a standing team project of the review's workspace, as review_setup_team admits its teams, and a review keeps the audience, the kind of version and the setup it was created with. The team is a plain id with this check and no key, because Practice Review does not depend on the project module (ADR 0138). The setup may only go to NULL, as its key does when the setup goes, and a review never gets a setup after it was created. Only a review from before may get its audience and kind of version once, which a later backfill does. An update that keeps the team is not checked again, so a team project removed later does not hold up its reviews. Update guards only validate, so they run after the row write.</comment>
+        <createProcedure>
+CREATE FUNCTION public.admit_review_audience_team() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM 1 FROM public.project_team t
+        WHERE t.id = NEW.audience_team_id AND t.workspace_id = NEW.workspace_id AND t.removed_at IS NULL;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'a team review names a standing team project of its workspace' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END $$
+        </createProcedure>
+        <createProcedure>
+CREATE FUNCTION public.refuse_review_audience_change() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF (OLD.audience IS NOT NULL
+            AND (NEW.audience IS DISTINCT FROM OLD.audience OR NEW.audience_team_id IS DISTINCT FROM OLD.audience_team_id))
+        OR (OLD.version_kind IS NOT NULL AND NEW.version_kind IS DISTINCT FROM OLD.version_kind)
+        OR (NEW.setup_id IS NOT NULL AND NEW.setup_id IS DISTINCT FROM OLD.setup_id) THEN
+        RAISE EXCEPTION 'a review keeps the audience, the kind of version and the setup it was created with' USING ERRCODE = '23514';
+    END IF;
+    RETURN NULL;
+END $$
+        </createProcedure>
+        <sql>
+CREATE TRIGGER review_audience_team_admit BEFORE INSERT ON public.review
+    FOR EACH ROW WHEN (NEW.audience_team_id IS NOT NULL) EXECUTE FUNCTION public.admit_review_audience_team();
+CREATE TRIGGER review_audience_team_still_admitted AFTER UPDATE OF audience_team_id, workspace_id ON public.review
+    FOR EACH ROW WHEN (NEW.audience_team_id IS NOT NULL
+        AND (NEW.audience_team_id IS DISTINCT FROM OLD.audience_team_id OR NEW.workspace_id IS DISTINCT FROM OLD.workspace_id))
+    EXECUTE FUNCTION public.admit_review_audience_team();
+CREATE TRIGGER review_audience_fixed AFTER UPDATE OF audience, audience_team_id, version_kind, setup_id ON public.review
+    FOR EACH ROW EXECUTE FUNCTION public.refuse_review_audience_change();
+        </sql>
+        <rollback>
+DROP TRIGGER review_audience_fixed ON public.review;
+DROP TRIGGER review_audience_team_still_admitted ON public.review;
+DROP TRIGGER review_audience_team_admit ON public.review;
+DROP FUNCTION public.refuse_review_audience_change();
+DROP FUNCTION public.admit_review_audience_team();
+        </rollback>
+    </changeSet>
+    <changeSet id="1795835723604-5" author="hephaestus" runInTransaction="false">
+        <comment>A delete of a review setup sets setup_id on its reviews to NULL, and without this index it scans review. Only reviews that a setup started carry one.</comment>
+        <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_review_setup; CREATE INDEX CONCURRENTLY idx_review_setup ON public.review (setup_id, workspace_id) WHERE setup_id IS NOT NULL</sql>
+        <rollback>
+            <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_review_setup</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

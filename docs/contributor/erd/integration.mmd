@@ -698,6 +698,29 @@ erDiagram
         VARCHAR(512) slug UK
     }
 
+    TeamItem {
+        BIGINT id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        UUID team_id FK "NOT NULL"
+        VARCHAR(64) kind "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ removed_at
+    }
+
+    TeamItemVersion {
+        UUID id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        BIGINT item_id FK,UK "NOT NULL"
+        INTEGER sequence_number UK "NOT NULL"
+        BIGINT submitted_by FK
+        TIMESTAMPTZ submitted_at "NOT NULL"
+        UUID request_key UK "NOT NULL"
+        VARCHAR(16) state "NOT NULL"
+        TIMESTAMPTZ expires_at "NOT NULL"
+        BIGINT created_in_transaction "NOT NULL"
+        VARCHAR(200) title
+    }
+
     TeamMembership {
         VARCHAR(32) role
         BIGINT user_id PK,FK
@@ -708,6 +731,28 @@ erDiagram
         VARCHAR(32) permission "NOT NULL"
         BIGINT repository_id PK,FK
         BIGINT team_id PK,FK
+    }
+
+    TeamSnapshot {
+        UUID id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        UUID version_id FK,UK "NOT NULL"
+        VARCHAR(64) snapshot_key UK "NOT NULL"
+        VARCHAR(16) role "NOT NULL"
+        VARCHAR(16) entry_route "NOT NULL"
+        BYTEA content "NOT NULL"
+        VARCHAR(100) media_type "NOT NULL"
+        VARCHAR(64) content_sha256 "NOT NULL"
+        BYTEA normalized
+        VARCHAR(64) normalized_sha256
+        VARCHAR(64) normalizer_id
+        INTEGER normalizer_version
+        VARCHAR(8) normalized_by
+        BYTEA preview
+        VARCHAR(16) source_how "NOT NULL"
+        JSONB source_revision
+        TEXT live_link
+        JSONB limitations "NOT NULL"
     }
 
     User {
@@ -745,6 +790,7 @@ erDiagram
 
     Account["Account · Core"]
     Membership["Membership · Workspace (Tenancy)"]
+    ProjectTeam["ProjectTeam · Project Teams"]
     Workspace["Workspace · Workspace (Tenancy)"]
 
     %% Relationships
@@ -829,6 +875,10 @@ erDiagram
     Connection ||--o{ SyncJob : connection_id
     Workspace ||--o{ SyncJob : has
     IdentityProvider ||--o{ Team : references
+    ProjectTeam ||--o{ TeamItem : has
+    TeamItem ||--o{ TeamItemVersion : has
+    Account ||--o{ TeamItemVersion : references
+    TeamItemVersion ||--o{ TeamSnapshot : has
     IdentityProvider ||--o{ User : references
 
     %% Many-to-Many relationships
@@ -876,6 +926,7 @@ erDiagram
 
     class Account referenceEntity
     class Membership referenceEntity
+    class ProjectTeam referenceEntity
     class Workspace referenceEntity
     class Issue primaryEntity
     class IssueAssignee associationEntity

@@ -12,6 +12,9 @@ import de.tum.cit.aet.hephaestus.core.action.ActionState;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.submission.TeamVersionState;
+import de.tum.cit.aet.hephaestus.mentor.runtime.MentorRequest;
+import de.tum.cit.aet.hephaestus.mentor.runtime.MentorSource;
 import de.tum.cit.aet.hephaestus.practices.advice.AdviceState;
 import de.tum.cit.aet.hephaestus.practices.feedback.thread.FeedbackThreadResolutionState;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeState;
@@ -20,6 +23,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
+import de.tum.cit.aet.hephaestus.project.HostPairing;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.ArrayDeque;
 import java.util.EnumSet;
@@ -46,6 +50,18 @@ class LifecycleContractTest extends HephaestusArchitectureTest {
                         Set.of(Account.Status.UNCLAIMED, Account.Status.ACTIVE),
                         Set.of(Account.Status.DELETED)),
                 new Contract<>(IntegrationState.class, Set.of(IntegrationState.PENDING), Set.of()),
+                new Contract<>(
+                        MentorSource.State.class, Set.of(MentorSource.State.LIVE), Set.of(MentorSource.State.DELETED)),
+                new Contract<>(
+                        MentorRequest.State.class,
+                        Set.of(MentorRequest.State.OPEN),
+                        Set.of(
+                                MentorRequest.State.ANSWERED,
+                                MentorRequest.State.CONTINUED,
+                                MentorRequest.State.FAILED,
+                                MentorRequest.State.STOPPED,
+                                MentorRequest.State.SUPERSEDED,
+                                MentorRequest.State.EXPIRED)),
                 new Contract<>(
                         ReviewItemState.class,
                         Set.of(ReviewItemState.LISTED, ReviewItemState.WITHHELD),
@@ -85,13 +101,19 @@ class LifecycleContractTest extends HephaestusArchitectureTest {
                         FeedbackThreadResolutionState.class, Set.of(FeedbackThreadResolutionState.PENDING), Set.of()),
                 new Contract<>(AdviceState.class, Set.of(AdviceState.CURRENT), Set.of()),
                 new Contract<>(
+                        TeamVersionState.class, Set.of(TeamVersionState.AVAILABLE), Set.of(TeamVersionState.ERASED)),
+                new Contract<>(
                         PersonDataRequest.State.class,
                         Set.of(PersonDataRequest.State.PREVIEW),
                         Set.of(PersonDataRequest.State.COMPLETE, PersonDataRequest.State.EXPIRED)),
                 new Contract<>(
                         Workspace.WorkspaceStatus.class,
                         Set.of(Workspace.WorkspaceStatus.ACTIVE),
-                        Set.of(Workspace.WorkspaceStatus.PURGED)));
+                        Set.of(Workspace.WorkspaceStatus.PURGED)),
+                new Contract<>(
+                        HostPairing.Status.class,
+                        Set.of(HostPairing.Status.PENDING),
+                        Set.of(HostPairing.Status.APPROVED)));
     }
 
     @Test

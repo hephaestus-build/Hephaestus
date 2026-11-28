@@ -20,12 +20,6 @@ const longContent = {
 	id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
 	summary:
 		"The review keeps every boundary visible even when the result needs enough words to wrap across a narrow screen twice over",
-	person: {
-		accountId: "10",
-		avatarUrl: null,
-		providerLogin: "alexandria-weekend-contributor",
-		displayName: "Alexandria Catherine Montgomery-Worthington",
-	},
 } satisfies ReviewResult;
 
 const overAWeek: ReviewResult[] = reviewResults.map((result, index) => ({
@@ -61,7 +55,7 @@ export const Default: Story = {
 			within(table)
 				.getAllByRole("columnheader")
 				.map((head) => head.textContent),
-		).toEqual(["Recorded", "Observation", "Work", "Developer", "Actions", "Open"]);
+		).toEqual(["Recorded", "Observation", "Work", "Actions", "Open"]);
 		await expect(canvas.getAllByText("Not met · 1 problem")).toHaveLength(4);
 		await expect(canvas.getAllByText("Not met · 2 problems")).toHaveLength(3);
 		await expect(canvas.getAllByText("Not met · 3 problems")).toHaveLength(1);

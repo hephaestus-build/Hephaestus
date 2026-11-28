@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProviderAccounts;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
-import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceResultVisibility;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -22,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class WorkspaceQueriesAdapter implements WorkspaceQueries, WorkspaceProviderAccounts, WorkspaceResultVisibility {
+public class WorkspaceQueriesAdapter implements WorkspaceQueries, WorkspaceProviderAccounts {
     private final WorkspaceRepository workspaces;
     private final RepositoryToMonitorRepository monitors;
     private final ReviewScopeRepositoryRepository targets;
@@ -75,14 +74,6 @@ public class WorkspaceQueriesAdapter implements WorkspaceQueries, WorkspaceProvi
                         workspace.getDisplayName(),
                         workspace.isPublicActivityContributorsWithoutAccount(),
                         workspace.isPublicActivitySearchEngines()));
-    }
-
-    @Override
-    public boolean perPersonResultsForAdmins(long workspaceId) {
-        return workspaces
-                .findById(workspaceId)
-                .map(Workspace::isPerPersonResultsForAdmins)
-                .orElse(false);
     }
 
     @Override

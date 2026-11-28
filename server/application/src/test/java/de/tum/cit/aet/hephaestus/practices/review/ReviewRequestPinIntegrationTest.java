@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
@@ -30,16 +31,19 @@ import de.tum.cit.aet.hephaestus.practices.PracticeReadSource;
 import de.tum.cit.aet.hephaestus.practices.PracticeReads;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.scan.ScanReportTestData;
 import de.tum.cit.aet.hephaestus.practices.spi.BoundModelSlot;
 import de.tum.cit.aet.hephaestus.practices.spi.FrozenModel;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAudience;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCaptureDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequest;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewVersionKind;
 import de.tum.cit.aet.hephaestus.testconfig.ItemFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
@@ -261,6 +265,31 @@ class ReviewRequestPinIntegrationTest extends AbstractResultAdmissionIntegration
                         refusal -> assertThat(refusal.reason()).isEqualTo(ReviewRequestRejected.Reason.TRIAL_ACTIVE));
         // A trial holds nothing of the work's own reviews: a requested review of the same work still runs.
         assertThat(service.request(review.request())).isNotEqualTo(id);
+    }
+
+    @Test
+    void shouldRecordWhoReadsEachNewReviewAndWhatItPinned() {
+        doReturn(pinned).when(productItems).pin(eq(repository), isNull());
+        var scan = reviews.findById(service.request(scan(UUID.randomUUID()))).orElseThrow();
+        var review = itemReview();
+        recordFingerprintReads(review.ref());
+        var trial = reviews.findById(service.request(ReviewRequest.builder()
+                        .workspaceId(review.workspace())
+                        .itemId(review.ref().itemId())
+                        .kind(ReviewKind.ITEM)
+                        .origin(ReviewOrigin.TRIAL)
+                        .requestedById(review.request().requestedById())
+                        .practiceIds(List.of(review.practice().getId()))
+                        .build()))
+                .orElseThrow();
+        var itemReview = reviews.findById(service.request(review.request())).orElseThrow();
+
+        assertThat(List.of(scan, trial, itemReview))
+                .extracting(Review::getVersionKind, Review::getAudience, Review::getAudienceTeamId, Review::getSetupId)
+                .containsExactly(
+                        tuple(ReviewVersionKind.REPOSITORY_COMMIT, ReviewAudience.OPERATIONAL, null, null),
+                        tuple(ReviewVersionKind.ITEM_REVISION, ReviewAudience.OPERATIONAL, null, null),
+                        tuple(ReviewVersionKind.ITEM_REVISION, ReviewAudience.PERSONAL, null, null));
     }
 
     @Test

@@ -93,7 +93,6 @@ function PracticeReviewOverviewRoute() {
 				dateTitle="Dates"
 				groups={scopeSources.groups}
 				practices={scopeSources.practices}
-				people={scopeSources.people}
 				notAppliedNote="Not applied on the overview"
 			/>
 			<PracticeReviewOverviewPage

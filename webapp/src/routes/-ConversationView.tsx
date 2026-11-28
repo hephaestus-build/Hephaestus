@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { lazy, type ReactNode, Suspense, useState } from "react";
 
 import { ConversationComposer } from "@/components/conversation/ConversationComposer";
 import {
@@ -15,6 +15,7 @@ import { Greeting } from "@/components/conversation/Greeting";
 import { ThreadGone } from "@/components/conversation/ThreadPanel";
 import { liveTurnOf } from "@/components/conversation/timeline-rows";
 import { WeeklyDigestCard } from "@/components/conversation/WeeklyDigestCard";
+import type { SupportShareDialogProps } from "@/components/support-share/SupportShareDialog";
 import { Marker, MarkerContent } from "@/components/ui/marker";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import {
@@ -24,6 +25,7 @@ import {
 	useConversationTimeline,
 	useMarkConversationRead,
 } from "@/hooks/use-conversation";
+import { useSupportShare } from "@/hooks/use-support-share";
 import { copyToClipboard } from "@/lib/clipboard";
 import { readDraft, writeDraft } from "@/lib/composer-drafts";
 import { firstNonBlank, hasText } from "@/lib/text";
@@ -35,6 +37,22 @@ import { useAuth } from "@/runtime/auth/AuthContext";
  */
 
 const copy = (text: string) => copyToClipboard(text, "Message copied");
+
+// A person shares a question with support rarely, so the dialog's code loads on its first open, not with the
+// conversation.
+const SupportShareDialog = lazy(async () => {
+	const { SupportShareDialog: dialog } =
+		await import("@/components/support-share/SupportShareDialog");
+	return { default: dialog };
+});
+
+function LazySupportShareDialog(props: SupportShareDialogProps) {
+	return props.open ? (
+		<Suspense fallback={null}>
+			<SupportShareDialog {...props} />
+		</Suspense>
+	) : null;
+}
 
 /**
  * The name of the workspace whose conversation this is, for the AI disclosure. The workspace list is
@@ -56,10 +74,16 @@ function useDeveloper(): MessageAuthor {
 
 /**
  * The writes the conversation offers: no asking again — Reply in thread, Try again, Retry — while
- * the developer cannot ask Hephaestus.
+ * the developer cannot ask Hephaestus. A question already asked can always be shared with support.
  */
-function offeredActions(actions: ConversationActions, canAsk: boolean) {
-	return canAsk ? actions : { ...actions, ask: undefined };
+function offeredActions(
+	actions: ConversationActions,
+	canAsk: boolean,
+	onShareWithSupport: (turnId: string) => void,
+) {
+	return canAsk
+		? { ...actions, onShareWithSupport }
+		: { ...actions, ask: undefined, onShareWithSupport };
 }
 
 /**
@@ -106,6 +130,7 @@ export function MainConversation({
 	const workspaceName = useWorkspaceName(workspaceSlug);
 	const state = useConversationTimeline(workspaceSlug);
 	const actions = useConversationActions(workspaceSlug);
+	const support = useSupportShare(workspaceSlug);
 	// Reading the conversation here, on the conversation page or in the Hephaestus panel, clears the
 	// header button's dot, for answers in its threads too.
 	useMarkConversationRead(workspaceSlug);
@@ -121,38 +146,41 @@ export function MainConversation({
 		setComposerMount((mount) => mount + 1);
 	};
 	return (
-		<ConversationTimeline
-			label="Your conversation"
-			workspaceSlug={workspaceSlug}
-			workspaceName={workspaceName}
-			state={state}
-			developer={developer}
-			onCopy={copy}
-			threads={threads}
-			livePaused={livePaused}
-			jumpTo={jumpTo}
-			actions={offeredActions(actions, canAsk)}
-			empty={emptyConversation(canAsk, drafting ? undefined : askExample)}
-			composer={
-				canAsk ? (
-					<ConversationComposer
-						key={composerMount}
-						label="Message Hephaestus"
-						placeholder="Message Hephaestus"
-						focusOnMount={focusComposer || composerMount > 0}
-						draftKey={draftKey}
-						onDraftChange={(text) => setDrafting(hasText(text))}
-						context={pageContext?.chip}
-						onSend={(text) => actions.send(text, { pageContext: pageContext?.label })}
-						stop={
-							stoppable === undefined
-								? undefined
-								: { label: "Stop answer", onStop: () => actions.onStop(stoppable) }
-						}
-					/>
-				) : undefined
-			}
-		/>
+		<>
+			<ConversationTimeline
+				label="Your conversation"
+				workspaceSlug={workspaceSlug}
+				workspaceName={workspaceName}
+				state={state}
+				developer={developer}
+				onCopy={copy}
+				threads={threads}
+				livePaused={livePaused}
+				jumpTo={jumpTo}
+				actions={offeredActions(actions, canAsk, support.open)}
+				empty={emptyConversation(canAsk, drafting ? undefined : askExample)}
+				composer={
+					canAsk ? (
+						<ConversationComposer
+							key={composerMount}
+							label="Message Hephaestus"
+							placeholder="Message Hephaestus"
+							focusOnMount={focusComposer || composerMount > 0}
+							draftKey={draftKey}
+							onDraftChange={(text) => setDrafting(hasText(text))}
+							context={pageContext?.chip}
+							onSend={(text) => actions.send(text, { pageContext: pageContext?.label })}
+							stop={
+								stoppable === undefined
+									? undefined
+									: { label: "Stop answer", onStop: () => actions.onStop(stoppable) }
+							}
+						/>
+					) : undefined
+				}
+			/>
+			<LazySupportShareDialog {...support.dialog} />
+		</>
 	);
 }
 
@@ -177,6 +205,7 @@ export function ThreadConversation({
 	const workspaceName = useWorkspaceName(workspaceSlug);
 	const thread = useConversationThread(workspaceSlug, parentEntryId);
 	const actions = useConversationActions(workspaceSlug);
+	const support = useSupportShare(workspaceSlug);
 	switch (thread.status) {
 		case "loading": {
 			return <ConversationTimelineSkeleton rows={2} label="Loading the thread…" />;
@@ -205,54 +234,59 @@ export function ThreadConversation({
 			// in, and a running answer keeps Stop on its own line.
 			const canAskHere = canAsk && !parent.deleted;
 			return (
-				<ConversationTimeline
-					label="Thread"
-					workspaceSlug={workspaceSlug}
-					workspaceName={workspaceName}
-					state={timeline}
-					developer={developer}
-					onCopy={copy}
-					livePaused={livePaused}
-					jumpTo={jumpTo}
-					lead={
-						<div className="flex flex-col gap-4">
-							<ConversationMessage
-								message={parent}
-								developer={developer}
-								workspaceSlug={workspaceSlug}
-							>
-								{parent.kind === "DIGEST" && !parent.deleted && (
-									<WeeklyDigestCard digest={parent.digest} workspaceSlug={workspaceSlug} />
+				<>
+					<ConversationTimeline
+						label="Thread"
+						workspaceSlug={workspaceSlug}
+						workspaceName={workspaceName}
+						state={timeline}
+						developer={developer}
+						onCopy={copy}
+						livePaused={livePaused}
+						jumpTo={jumpTo}
+						lead={
+							<div className="flex flex-col gap-4">
+								<ConversationMessage
+									message={parent}
+									developer={developer}
+									workspaceSlug={workspaceSlug}
+								>
+									{parent.kind === "DIGEST" && !parent.deleted && (
+										<WeeklyDigestCard digest={parent.digest} workspaceSlug={workspaceSlug} />
+									)}
+								</ConversationMessage>
+								{replies > 0 && (
+									<Marker variant="separator">
+										<MarkerContent>
+											{replies === 1 ? "1 reply" : `${replies} replies`}
+										</MarkerContent>
+									</Marker>
 								)}
-							</ConversationMessage>
-							{replies > 0 && (
-								<Marker variant="separator">
-									<MarkerContent>{replies === 1 ? "1 reply" : `${replies} replies`}</MarkerContent>
-								</Marker>
-							)}
-						</div>
-					}
-					actions={offeredActions(actions, canAskHere)}
-					composer={
-						canAskHere ? (
-							<ConversationComposer
-								label="Reply in thread"
-								placeholder="Reply in thread"
-								focusOnMount={focusComposer}
-								draftKey={`${workspaceSlug}:thread:${parentEntryId}`}
-								onSend={(text) => actions.send(text, { parentEntryId: parent.id })}
-								stop={
-									stoppable === undefined
-										? undefined
-										: {
-												label: "Stop answer in this thread",
-												onStop: () => actions.onStop(stoppable),
-											}
-								}
-							/>
-						) : undefined
-					}
-				/>
+							</div>
+						}
+						actions={offeredActions(actions, canAskHere, support.open)}
+						composer={
+							canAskHere ? (
+								<ConversationComposer
+									label="Reply in thread"
+									placeholder="Reply in thread"
+									focusOnMount={focusComposer}
+									draftKey={`${workspaceSlug}:thread:${parentEntryId}`}
+									onSend={(text) => actions.send(text, { parentEntryId: parent.id })}
+									stop={
+										stoppable === undefined
+											? undefined
+											: {
+													label: "Stop answer in this thread",
+													onStop: () => actions.onStop(stoppable),
+												}
+									}
+								/>
+							) : undefined
+						}
+					/>
+					<LazySupportShareDialog {...support.dialog} />
+				</>
 			);
 		}
 	}

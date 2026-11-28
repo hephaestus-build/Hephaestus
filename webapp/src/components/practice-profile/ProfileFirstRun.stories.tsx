@@ -159,7 +159,12 @@ export const FirstReviewContinuing: Story = {
 			at: minutesBefore(40),
 			item: pullRequest(12),
 			status: "QUEUED",
-			progress: { practicesEnded: 76, practicesTotal: 200, continuing: true },
+			progress: {
+				practicesEnded: 76,
+				practicesTotal: 200,
+				continuing: true,
+				stage: "CONTINUING",
+			},
 		},
 	},
 	play: async ({ canvas }) => {
@@ -274,15 +279,6 @@ export const NoModelForChoice: Story = {
 		await expect(
 			canvas.getByText("Practice reviews are not set up for your AI choice yet"),
 		).toBeVisible();
-	},
-};
-
-/** A read-only user view shows the reason without a way to change someone else's choice. */
-export const NoAiInUserView: Story = {
-	args: { readiness: blocked("NO_AI"), aiChoiceLink: undefined },
-	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Hephaestus does not review your work here")).toBeVisible();
-		await expect(canvas.queryByRole("button")).toBeNull();
 	},
 };
 

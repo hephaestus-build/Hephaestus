@@ -45,13 +45,6 @@ public record WorkspaceListItemDTO(
                         + " turned it on")
         Boolean publishesPublicActivity,
 
-        // Optional in the contract: a server from before this property leaves it out (ADR 0103).
-        @Schema(
-                description = "Whether workspace admins see practice results per person. Every member reads it,"
-                        + " because it decides who sees their results.",
-                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-        Boolean perPersonResultsForAdmins,
-
         @NonNull
         @Schema(
                 description = "Hosts that a link in model-written text may point to in this workspace: Hephaestus and"
@@ -77,7 +70,6 @@ public record WorkspaceListItemDTO(
                 instanceAllowsPublicActivity
                         && workspace.status() == WorkspaceStatus.ACTIVE
                         && Boolean.TRUE.equals(workspace.publicActivityEnabled()),
-                workspace.perPersonResultsForAdmins(),
                 linkHosts);
     }
 }

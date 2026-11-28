@@ -27,10 +27,8 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
- * Whether a model pool takes another measuring review now. A pool with no running measurement always takes one. Past
- * that, it takes the next one only while the open practices of its running measurements and of the next one fit the
- * calls that the pool lets measurements hold. Each open practice is a session with one call in flight. The pool also
- * waits while a measuring call waits longer than the permit aging and until its newest measurement has run that long.
+ * Reserves session slots for the next measuring review. The review can use the pool's free slots even when its open
+ * practices need several waves. While the pool is busy, congestion and the newest start can also hold admission.
  *
  * <p>The dispatch asks this in the claim's order, so the workspace with the fewest leased runs goes first, and a held
  * review gets no sandbox. The claim asks it again under the pool's lock, so two servers never admit past the rule.
@@ -38,6 +36,8 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnAgentRuntime
 public class ReviewPoolAdmission implements RunAdmission {
+    static final String SESSION_LIMIT = "reviewSessionLimit";
+
     private final ReviewJobRepository jobs;
     private final LlmCallPools pools;
     private final ReviewAssignmentProgress progress;
@@ -141,19 +141,22 @@ public class ReviewPoolAdmission implements RunAdmission {
         }
     }
 
-    record Claim(long poolId, boolean admitted) {}
+    record Claim(long poolId, int sessionLimit) {
+        boolean admitted() {
+            return sessionLimit > 0;
+        }
+    }
 
     /** Rechecks dispatch's decision while holding the pool's admission lock. */
     Claim claim(LlmModelResolver.ConnectionRef model, ReviewJob job) {
         long poolId = pools.poolFor(model);
         pools.lockAdmission(poolId);
         var load = jobs.poolLoad(poolId);
-        if (load.getRunning() == 0) return new Claim(poolId, true);
-        var jobIds = new ArrayList<>(List.of(load.getJobIds()));
+        var jobIds = new ArrayList<>(runningIds(load));
         jobIds.add(job.getId());
         var ended = progress.endedPracticeCounts(jobIds);
-        long practices = openWidth(load.getPractices() + originalWidth(job), ended);
-        return new Claim(poolId, admitsWhileBusy(poolId, load, practices));
+        int practices = remaining(originalWidth(job), ended.getOrDefault(job.getId(), 0));
+        return new Claim(poolId, reservation(poolId, load, ended, practices));
     }
 
     String poolLabel(long poolId) {
@@ -163,16 +166,21 @@ public class ReviewPoolAdmission implements RunAdmission {
     /** The same rule serves dispatch and the claim that holds the pool lock. */
     private boolean admits(long poolId, int practices) {
         var load = jobs.poolLoad(poolId);
-        if (load.getRunning() == 0) return true;
-        var ended = progress.endedPracticeCounts(List.of(load.getJobIds()));
-        return admitsWhileBusy(poolId, load, openWidth(load.getPractices(), ended) + practices);
+        var ended = progress.endedPracticeCounts(runningIds(load));
+        return reservation(poolId, load, ended, practices) > 0;
     }
 
-    private boolean admitsWhileBusy(long poolId, ReviewJobRepository.PoolLoad load, long practices) {
-        if (practices > room(load)) return false;
-        Instant newest = load.getNewestStart();
-        return !pools.congested(poolId)
-                && (newest == null || newest.plus(pools.admissionSpacing()).isBefore(Instant.now()));
+    private int reservation(
+            long poolId, List<ReviewJobRepository.PoolLoad> load, Map<UUID, Integer> ended, int practices) {
+        long free = room(load) - reserved(load, ended, null);
+        if (load.isEmpty() || load.getFirst().getJobId() == null) return sessionLimit(practices, free);
+        if (free < 0 || (free == 0 && practices > 0) || pools.congested(poolId)) return 0;
+        Instant startAllowedBy = Instant.now().minus(pools.admissionSpacing());
+        for (var measurement : load) {
+            Instant started = measurement.getStartedAt();
+            if (started != null && !started.isBefore(startAllowedBy)) return 0;
+        }
+        return sessionLimit(practices, free);
     }
 
     private static int remaining(int practices, int ended) {
@@ -183,36 +191,55 @@ public class ReviewPoolAdmission implements RunAdmission {
         return Math.max(1, job.getInput().assignments().size());
     }
 
-    private static long openWidth(long practices, Map<UUID, Integer> ended) {
-        long endedCount = ended.values().stream().mapToLong(Integer::longValue).sum();
-        return Math.max(0, practices - endedCount);
+    private static List<UUID> runningIds(List<ReviewJobRepository.PoolLoad> load) {
+        return load.stream()
+                .map(ReviewJobRepository.PoolLoad::getJobId)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    private static long reserved(
+            List<ReviewJobRepository.PoolLoad> load, Map<UUID, Integer> ended, @Nullable UUID except) {
+        long slots = 0;
+        for (var measurement : load) {
+            UUID id = measurement.getJobId();
+            if (id == null || id.equals(except)) continue;
+            int open = remaining(measurement.getPractices(), ended.getOrDefault(id, 0));
+            Integer limit = measurement.getSessionLimit();
+            slots += limit == null ? open : Math.min(open, limit);
+        }
+        return slots;
     }
 
     /**
      * The calls that measurements may hold in the pool now: its learned limit, capped by its maximum, less the calls kept
      * for interactive work. A pool that is gone holds nothing back: the claim refuses the review with its own reason.
      */
-    static int room(ReviewJobRepository.PoolLoad load) {
-        Integer learned = load.getLearnedLimit();
-        if (learned == null) return Integer.MAX_VALUE;
-        int limit = LlmCallLimit.effective(learned, load.getMaxConcurrentCalls());
+    private static int room(List<ReviewJobRepository.PoolLoad> load) {
+        if (load.isEmpty()) return Integer.MAX_VALUE;
+        var pool = load.getFirst();
+        return room(pool.getLearnedLimit(), pool.getMaxConcurrentCalls());
+    }
+
+    static int room(int learned, @Nullable Integer maximum) {
+        int limit = LlmCallLimit.effective(learned, maximum);
         return limit - LlmCallLimit.reserve(limit);
     }
 
     /**
-     * The practice sessions that a running measurement of {@code practices} practices may run at once: the pool's room
-     * less the practices of the other running measurements, and at least one, so a review always makes progress.
+     * A claimed attempt keeps its reservation. An attempt claimed by the old server has no stored limit and uses the
+     * room left by the other measurements, with at least one session to make progress.
      */
     int sessionLimit(long poolId, ReviewJob job) {
+        int stored = job.getConfigSnapshot().path(SESSION_LIMIT).asInt(0);
+        if (stored > 0) return stored;
         var load = jobs.poolLoad(poolId);
-        var ended = progress.endedPracticeCounts(List.of(load.getJobIds()));
+        var ended = progress.endedPracticeCounts(runningIds(load));
         int own = remaining(originalWidth(job), ended.getOrDefault(job.getId(), 0));
-        return sessionLimit(load, openWidth(load.getPractices(), ended), own);
+        return sessionLimit(own, room(load) - reserved(load, ended, job.getId()));
     }
 
-    static int sessionLimit(ReviewJobRepository.PoolLoad load, long reserved, int practices) {
-        long others = Math.max(0, reserved - practices);
-        long free = (long) room(load) - others;
+    static int sessionLimit(int practices, long free) {
         return (int) Math.max(1, Math.min(practices, free));
     }
 

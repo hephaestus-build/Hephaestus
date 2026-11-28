@@ -39,7 +39,6 @@ describe("anonymous email unsubscribe confirmation", () => {
 		expect(request?.headers.has("Referer")).toBe(false);
 		expect(request?.headers.has("Authorization")).toBe(false);
 		expect(request?.headers.has("X-XSRF-TOKEN")).toBe(false);
-		expect(request?.headers.has("X-Impersonation-Allow-Writes")).toBe(false);
 		const form = await request?.formData();
 		expect(form?.get("List-Unsubscribe")).toBe("One-Click");
 	});

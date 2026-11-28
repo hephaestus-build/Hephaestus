@@ -312,6 +312,11 @@ final class PersonDataRecovery implements SmartLifecycle {
                         && identity.teamId() != null
                         && identity.teamId().matches("T[A-Z0-9]+");
             case "OUTLINE" -> UUID.fromString(identity.subject()).toString().equals(identity.subject());
+            // An OIDC subject is an opaque string that its issuer chose; it has no workspace key.
+            case "OIDC" ->
+                identity.teamId() == null
+                        && !identity.subject().isBlank()
+                        && identity.subject().length() <= 255;
             default -> false;
         };
         if (!nativeSubject) throw new IllegalArgumentException();

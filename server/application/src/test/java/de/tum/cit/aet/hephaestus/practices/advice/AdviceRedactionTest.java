@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.AdviceErasureListener;
+import de.tum.cit.aet.hephaestus.practices.spi.AdviceStaleCause;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import java.util.UUID;
@@ -27,23 +28,23 @@ class AdviceRedactionTest extends BaseUnitTest {
         UUID revision = UUID.randomUUID();
         when(revisions.lockWithSourcesIn(anyLong(), any())).thenReturn(List.of(revision));
 
-        var stale = redaction(listener).beforeResultsDeleted(7L, List.of(result, result));
+        var stale = redaction(listener).beforeResultsDeleted(7L, List.of(result, result), AdviceStaleCause.ERASURE);
 
         assertThat(stale).containsExactly(revision);
         verify(results).lockInIdOrder(7L, new UUID[] {result});
         verify(revisions).redact(7L, new UUID[] {revision});
-        verify(listener).staleRevisions(7L, List.of(revision));
+        verify(listener).staleRevisions(7L, List.of(revision), AdviceStaleCause.ERASURE);
     }
 
     @Test
     void shouldWriteNothingWhenNoRevisionHasTheResultsAsSources() {
         when(revisions.lockWithSourcesIn(anyLong(), any())).thenReturn(List.of());
 
-        assertThat(redaction(listener).beforeResultsDeleted(7L, List.of(UUID.randomUUID())))
+        assertThat(redaction(listener).beforeResultsDeleted(7L, List.of(UUID.randomUUID()), AdviceStaleCause.RETENTION))
                 .isEmpty();
 
         verify(revisions, never()).redact(anyLong(), any());
-        verify(listener, never()).staleRevisions(anyLong(), any());
+        verify(listener, never()).staleRevisions(anyLong(), any(), any());
     }
 
     @Test
@@ -51,7 +52,7 @@ class AdviceRedactionTest extends BaseUnitTest {
         UUID revision = UUID.randomUUID();
         when(revisions.lockWithSourcesIn(anyLong(), any())).thenReturn(List.of(revision));
 
-        assertThat(redaction(null).beforeResultsDeleted(7L, List.of(UUID.randomUUID())))
+        assertThat(redaction(null).beforeResultsDeleted(7L, List.of(UUID.randomUUID()), AdviceStaleCause.WITHDRAWAL))
                 .containsExactly(revision);
 
         verify(revisions).redact(7L, new UUID[] {revision});

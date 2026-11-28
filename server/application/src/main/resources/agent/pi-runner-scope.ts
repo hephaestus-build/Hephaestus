@@ -365,6 +365,7 @@ export async function runScope(
 	}
 	const safety = scheduleDeadline(safetyMs, () => stopTurn("safety"));
 	// Native events may stop a turn while awaited work settles or another session opens.
+	const programStop = { stalled: false };
 	const stoppedBy = () => trace.stoppedBy;
 	const pastSafety = () => safety.expired() || Date.now() >= measureEnd;
 	const endedUnrecorded = (slug: string) =>
@@ -684,6 +685,16 @@ export async function runScope(
 		);
 		const sources = sourcesForPractice(slug, evidenceSources);
 		trace.step = "practice_program";
+		trace.abortProgram = () => {
+			if (stopped.signal.aborted || measuringEnded.aborted) {
+				return;
+			}
+			programStop.stalled = true;
+			if (trace.programStep !== undefined) {
+				trace.stalledProgramStep = trace.programStep;
+			}
+			stopped.abort(new UnratedError("unavailable", "the practice program stalled"));
+		};
 		const outcome = await runPracticeProgram(
 			program,
 			{
@@ -699,6 +710,17 @@ export async function runScope(
 				review: async (options, signal) =>
 					reviewPractice(slug, practiceHeading, options, signal, sessionReads),
 				signal: AbortSignal.any([stopped.signal, measuringEnded]),
+				step: (step) => {
+					if (step === trace.programStep) {
+						return;
+					}
+					trace.programStep = step;
+					diagnose("practice.program_step", {
+						...placeOf(label),
+						practice: practiceAt(slug),
+						program_step: step,
+					});
+				},
 				// A practice script can log what it read, so its lines leave the sandbox only as a length.
 				log: (line) => {
 					diagnose("practice.program_log", { practice: practiceAt(slug), chars: line.length });
@@ -706,13 +728,15 @@ export async function runScope(
 				receipts: programReads,
 				requiredSources: requiredSourcesOf(slug),
 			},
-		);
+		).finally(() => {
+			clearTimeout(safetyTimer);
+			delete trace.abortProgram;
+		});
 		const reached: Receipts = {
 			reads: outcome.coverageReached.reads + sessionReads.reads,
 			truncatedReads: outcome.coverageReached.truncatedReads + sessionReads.truncatedReads,
 			failedReads: outcome.coverageReached.failedReads + sessionReads.failedReads,
 		};
-		clearTimeout(safetyTimer);
 		executions.set(slug, { ...outcome, coverageReached: reached });
 		if (stopFailure.error !== null) {
 			throw stopFailure.error;
@@ -773,6 +797,10 @@ export async function runScope(
 		sessionState().activePractice = null;
 		sessionState().currentTurnSlugs = slugs;
 		closeTurnTrace(trace);
+	}
+	// A local program failure leaves this practice open. It does not count toward consecutive provider stalls.
+	if (programStop.stalled) {
+		return null;
 	}
 	if (pastSafety() && stoppedBy() === null) {
 		diagnose("turn.near_ceiling", { ...placeOf(label), rest_not_reached: true });

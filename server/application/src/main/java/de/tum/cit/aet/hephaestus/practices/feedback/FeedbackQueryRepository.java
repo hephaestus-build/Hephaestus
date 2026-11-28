@@ -70,7 +70,6 @@ public interface FeedbackQueryRepository extends Repository<Feedback, UUID> {
           WHERE (q->>'reviewId' IS NULL OR f.review_id=CAST(q->>'reviewId' AS uuid))
             AND (q->>'itemId' IS NULL OR f.item_id=CAST(q->>'itemId' AS bigint))
             AND (q->>'itemKind' IS NULL OR f.item_kind=q->>'itemKind')
-            AND (q->>'personId' IS NULL OR f.person_account_id=CAST(q->>'personId' AS bigint))
             AND (q->>'destination' IS NULL OR q->'destination' @> to_jsonb(f.destination))
             AND (q->>'state' IS NULL OR q->'state' @> to_jsonb(f.state))
             AND (q->>'stopReason' IS NULL OR q->'stopReason' @> to_jsonb(f.stop_reason))

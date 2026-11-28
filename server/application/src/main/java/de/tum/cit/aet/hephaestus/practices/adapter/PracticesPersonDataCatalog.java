@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonFeedbackAnswerRedaction;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -14,6 +15,7 @@ import de.tum.cit.aet.hephaestus.practices.advice.AdviceRedaction;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyCleanupCustody;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
+import de.tum.cit.aet.hephaestus.practices.spi.AdviceStaleCause;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -79,6 +81,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
     private final FeedbackCopyCleanupCustody custody;
+    private final PersonFeedbackAnswerRedaction answers;
     private final PersonIdentityResolver identities;
     private final ScanReportService reports;
     private final AdviceRedaction advice;
@@ -203,6 +206,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 -216),
                         new ExternalFeedbackPersonDataStore(
                                 custody,
+                                answers,
                                 jdbc,
                                 mapper,
                                 "feedback_copy",
@@ -317,7 +321,8 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                                         row -> UUID.fromString(Objects.requireNonNull(
                                                                 row.columns().get("id"))),
                                                         Collectors.toList())))
-                                        .forEach(advice::beforeResultsDeleted);
+                                        .forEach((workspace, ids) ->
+                                                advice.beforeResultsDeleted(workspace, ids, AdviceStaleCause.ERASURE));
                                 return super.erase(selection, frozenScope);
                             }
                         },

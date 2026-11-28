@@ -42,7 +42,6 @@ export const budgets = {
 			"GET /user/features",
 			"GET /w/connections/catalog",
 			"GET /w/members/me",
-			"GET /w/members?size=100",
 			"GET /w/onboarding/me",
 			"GET /w/practice-groups",
 			"GET /w/practices",

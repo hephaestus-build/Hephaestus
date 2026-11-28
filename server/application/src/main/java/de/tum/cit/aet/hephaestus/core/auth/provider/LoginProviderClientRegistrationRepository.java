@@ -96,7 +96,9 @@ public class LoginProviderClientRegistrationRepository
                 Set.of(LoginProvider.ProviderType.GITHUB, LoginProvider.ProviderType.GITLAB));
     }
 
+    // This release does not sign in through an OIDC row that a later release wrote; it only reads the row.
     private boolean isApproved(LoginProvider provider) {
+        if (provider.getType() == LoginProvider.ProviderType.OIDC) return false;
         if (provider.getType() == LoginProvider.ProviderType.GITLAB) return allowedGitLab(provider.getBaseUrl());
         return (provider.getType() != LoginProvider.ProviderType.OUTLINE
                 || outlineOriginPolicy.allows(provider.getBaseUrl()));

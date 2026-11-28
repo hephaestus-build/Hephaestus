@@ -325,12 +325,14 @@ Do not keep a hand-drawn copy of the graph. The table below owns the relationshi
 | `integration.scm.github` | GitHub adapter | Anticorruption Layer: GitHub API to SCM and integration ports | [ADR 0095](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) |
 | `integration.scm.gitlab` | GitLab adapter | Anticorruption Layer: GitLab API to SCM and integration ports | [ADR 0095](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) |
 | `integration.slack` | Slack adapter | Anticorruption Layer: Slack API to chat and integration ports | [ADR 0095](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) |
+| `integration.submission` | Team items, their immutable versions and how they end | Customer/Supplier: it asks `project.spi` who receives the work, and it publishes the work behind neutral ports | [Proposed ADR 0165](https://github.com/hephaestus-build/Hephaestus/blob/416613cd9ea97ae1109ddca88fe904ad240cb697/docs/decisions/0165-a-team-reviews-immutable-submitted-versions-within-its-own-scope.md) |
 | `conversation` | Conversation, entries and turn ledger | Customer/Supplier: conversation execution and delivery | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
 | `mentor` | The account-owned mentor runtime: its mailbox, requests, attempts, tasks, callbacks and effects | Customer/Supplier: transports and evidence adapters through `mentor.spi` | [ADR 0120](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0120-a-conversation-thread-has-one-inbox-and-runs-one-turn-at-a-time.md) |
 | `notification` | Account notifications and their transports | Customer/Supplier: notification-producing domains | [ADR 0044](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0044-email-is-a-notification-transport.md) |
 | `observability` | Structured logging and metric contracts | Shared Kernel: observability | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
 | `practices` | Definitions, reviews, results and feedback | Customer/Supplier: evidence providers and execution | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
 | `relationship` | A person's relationship with Hephaestus, its settings and its change feed | Customer/Supplier: `learning`, `mentoring` and the runtime | [Proposed ADR 0138](https://github.com/hephaestus-build/Hephaestus/blob/225d54c044378aef8485248a3e9174841eda29d3/docs/decisions/0138-domain-modules-own-rows-and-rules-and-agent-modules-host-runs.md) |
+| `project` | Team projects, their members and who receives a team's work | Customer/Supplier: capture will ask it through `project.spi` | [Proposed ADR 0165](https://github.com/hephaestus-build/Hephaestus/blob/c810d6246c72d6098f45f271051891ce161cd379/docs/decisions/0165-a-team-reviews-immutable-submitted-versions-within-its-own-scope.md) |
 | `productfeedback` | Feedback about Hephaestus and its issue filing | Customer/Supplier: the SCM ProductFeedbackIssues port | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
 | `workspace` | Tenant lifecycle and workspace policies | Customer/Supplier: product modules and provider lifecycle | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
 
@@ -345,7 +347,7 @@ Only the GitHub and GitLab adapters share the SCM mirror. Another module goes th
 The server federates sign-in to GitHub or GitLab with Spring Security `oauth2Login`, then issues its own cookie-session JWT.
 Slack and Outline are link-only identity providers.
 [ADR 0088](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) records the sign-in model, and [Auth architecture](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/auth-architecture.md) shows the request flow.
-[Instance administration](./instance-admin) describes the recent-sign-in gate and the user view.
+[Instance administration](./instance-admin) describes the recent-sign-in gate and support shares.
 
 ## Practice reviews
 

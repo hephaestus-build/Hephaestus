@@ -13,8 +13,12 @@ import de.tum.cit.aet.hephaestus.practices.spi.ProblemCandidate;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultCandidate;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEvidence;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -24,6 +28,7 @@ class FeedbackTextPolicyTest extends BaseUnitTest {
     private static final String SUPPLIED = "https://docs.example.org/export#failures";
     private static final String PROBLEM_SUPPLIED = "https://en.wikipedia.org/wiki/Retry_(computing)";
     private static final String SUMMARY_ONLY = "https://summary.example.org/";
+    private static final Pattern CONVENTIONAL = Pattern.compile("^[a-z]+(\\([a-z]+\\))?: ");
 
     private final FeedbackTextPolicy policy = new FeedbackTextPolicy(List.of(admitted()));
 
@@ -118,6 +123,85 @@ class FeedbackTextPolicyTest extends BaseUnitTest {
                 .isEqualTo(Rule.LINK);
         assertThat(policy.broken("See https://en.wikipedia.org/wiki/Retry_(computing)/ for retries."))
                 .isEqualTo(Rule.LINK);
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "Two handlers drop the cause.",
+                "13 of 17 benchmark commit subjects follow the convention.",
+                "Keep the cause in all three handlers.",
+                "The export retries 5 times before it fails.",
+                "[Five handlers](" + SUPPLIED + ") drop the cause."
+            })
+    void shouldRefuseACountThatNoCitedQuoteSupplies(String text) {
+        assertThat(policy.broken(text)).isEqualTo(Rule.COUNT);
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "Keep `retries = 5` as the cap.",
+                "```java\nint retries = 5;\n```",
+                "Fix the cause that #5 introduced.",
+                "List the steps:\n\n1. Keep the cause.\n2. Rethrow it."
+            })
+    void shouldPermitANumberInCodeAnItemReferenceAndAListMarker(String text) {
+        assertThat(policy.broken(text)).isNull();
+    }
+
+    @Test
+    void shouldPermitACountThatACitedQuoteSupplies() {
+        var quoted = FeedbackTextPolicy.suppliedBy(List.of("int retries = 5; // Closes #14"));
+
+        assertThat(quoted.broken("The export retries 5 times and then drops the cause."))
+                .isNull();
+        assertThat(quoted.broken("The export retries five times, and issue 14 asks for a cause."))
+                .isNull();
+        assertThat(quoted.broken("The export retries 6 times and then drops the cause."))
+                .isEqualTo(Rule.COUNT);
+    }
+
+    /** A tens word and a following unit state one count, which a quote of only its tens does not supply (#5487). */
+    @ParameterizedTest
+    @ValueSource(strings = {"Twenty-one handlers drop the cause.", "Twenty one handlers drop the cause."})
+    void shouldRefuseACompoundCountThatNoCitedQuoteSupplies(String text) {
+        assertThat(FeedbackTextPolicy.suppliedBy(List.of("int pageSize = 20;")).broken(text))
+                .isEqualTo(Rule.COUNT);
+        assertThat(FeedbackTextPolicy.suppliedBy(List.of("int handlers = 21;")).broken(text))
+                .isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "Add one with a few sample teams so the card can be checked.",
+                "The handler is the one that drops the cause.",
+                "One commit subject says only \"fix\"."
+            })
+    void shouldReadOneAsNoCountBecauseItIsAlsoAPronoun(String text) {
+        assertThat(policy.broken(text)).isNull();
+    }
+
+    /**
+     * A staging review composed "13 of 17 benchmark commit subjects" where the pinned source has 14 of 17 (#5469). The
+     * quotes are the subjects, and none states a count, so the server verified no count: both numbers are refused.
+     */
+    @Test
+    void shouldRefuseACountOfCommitSubjectsThatThePinnedSourceDoesNotState() throws IOException {
+        var subjects = Files.readAllLines(Path.of("src/test/resources/agent/handler/benchmark-commit-subjects.txt"));
+        assertThat(subjects).hasSize(17);
+        assertThat(subjects.stream()
+                        .filter(subject -> CONVENTIONAL.matcher(subject).find()))
+                .hasSize(14);
+        var pinned = FeedbackTextPolicy.suppliedBy(subjects);
+
+        assertThat(pinned.broken("13 of 17 benchmark commit subjects follow the convention."))
+                .isEqualTo(Rule.COUNT);
+        assertThat(pinned.broken("14 of 17 benchmark commit subjects follow the convention."))
+                .isEqualTo(Rule.COUNT);
+        assertThat(pinned.broken("Most benchmark commit subjects follow the convention, but \"WIP\" does not."))
+                .isNull();
     }
 
     private static AdmittedResultSnapshot admitted() {

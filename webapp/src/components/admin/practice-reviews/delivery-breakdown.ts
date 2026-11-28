@@ -47,7 +47,7 @@ export function deliveredByLocation(counts: DeliveredCounts, scope: OutcomeScope
 						target: {
 							list: "feedback",
 							search: {
-								...scopeSearch(scope, "feedback"),
+								...scopeSearch(scope),
 								state: [...DELIVERED_STATES],
 								location,
 							},
@@ -71,7 +71,7 @@ export function deliveredByLocation(counts: DeliveredCounts, scope: OutcomeScope
 			count: counts.partlyDelivered,
 			target: {
 				list: "feedback",
-				search: { ...scopeSearch(scope, "feedback"), partlyDelivered: true },
+				search: { ...scopeSearch(scope), partlyDelivered: true },
 			},
 		},
 	];
@@ -82,7 +82,7 @@ export function withheldByReason(
 	feedback: Pick<ReviewFeedbackCounts, "rejected">,
 	scope: OutcomeScope,
 ): BreakdownRow[] {
-	const range = scopeSearch(scope, "feedback");
+	const range = scopeSearch(scope);
 	const families = statusValues(WITHHOLDING_FAMILY_DEFS).map((family): BreakdownRow => ({
 		key: family,
 		def: WITHHOLDING_FAMILY_DEFS[family],

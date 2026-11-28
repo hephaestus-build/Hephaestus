@@ -23,7 +23,7 @@ A **workspace admin** has powers only within one workspace.
 
 ## The shell
 
-The [operator guide](/admin/instance-admin) owns console tasks and the user-view procedure.
+The [operator guide](/admin/instance-admin) owns console tasks and the support-share procedure.
 This page owns authorization, routing, and persistence implementation.
 
 The admin area is a **dedicated sidebar context** (`AppSidebar` `context === "admin"`).
@@ -46,8 +46,8 @@ Instance metadata endpoints under `/admin`, all gated by `hasAuthority('app_admi
 | `PATCH /admin/users/{id}` (`adminUpdateUser`) | Change an account's app role (last-admin guard. Cannot self-demote) |
 | `PATCH /admin/users/{id}/status` (`adminUpdateUserStatus`) | **Block** (`BLOCKED`) or **unblock** (`ACTIVE`) an account. Blocking revokes every session and makes sign-in, token renewal and installed clients refuse the account. Cannot block yourself or the last active instance admin. Audited as `ACCOUNT_STATUS_CHANGED`. |
 | `DELETE /admin/users/{id}/sessions` (`adminRevokeUserSessions`) | **Force sign out**: revoke all of an account's active sessions. Audited as `JWT_REVOKED`. |
-| `GET /admin/workspaces` (`adminListWorkspaces`) | **Metadata-only** overview of every workspace (slug, status, provider, owner login, member count, created-at). Cross-tenant through `@WorkspaceAgnostic`. This endpoint itself returns **no tenant content**. Private user content is reached through [read-only user views](#read-only-user-views). |
-| `GET /admin/audit` (`adminListAuthEvents`) | Read-only viewer over the append-only `auth_event` log (logins, user views, role changes, deletions). Paged, newest-first, filterable by event type. [read-only user views](#read-only-user-views) says what a `USER_VIEW` row carries. |
+| `GET /admin/workspaces` (`adminListWorkspaces`) | **Metadata-only** overview of every workspace (slug, status, provider, owner login, member count, created-at). Cross-tenant through `@WorkspaceAgnostic`. This endpoint returns **no tenant content**, and no staff route returns a person's private content ([support shares](#support-shares)). |
+| `GET /admin/audit` (`adminListAuthEvents`) | Read-only viewer over the append-only `auth_event` log (logins, earlier user views, role changes, deletions). Paged, newest-first, filterable by event type. [Earlier user views](#earlier-user-views) says what a `USER_VIEW` row carries. |
 | `GET /admin/config-audit` (`adminListConfigAuditEvents`) | Read-only viewer over `config_audit_event` — who changed which workspace setting, when, and from what to what. Rows are immutable inside the retention window (DB trigger). `ConfigAuditRetentionJob` is the only way one leaves. A row keeps its `entity_type`: model assignments write `MODEL_ASSIGNMENT`, and older rows keep `AGENT_BINDING`, `AGENT_CONFIG` or `AI_CONFIG_BINDING` (`ConfigAuditEntityType`). |
 | `/admin/llm/connections*` (`adminListLlmConnections`, `adminCreateLlmConnection`, `adminUpdateLlmConnection`, `adminDeleteLlmConnection`, `adminProbeLlmConnection`, `adminProbeLlmConnectionDraft`) | The instance LLM connection catalog. Routing identity (base URL, wire API, auth mode) is immutable after create. Probe tests a saved or draft connection before anything is enabled. |
 | `/admin/llm/models*` (`adminListLlmModels`, `adminCreateLlmModel`, `adminUpdateLlmModel`, `adminDeleteLlmModel`, `adminUpdateLlmModelPrice`, `adminUpdateLlmModelSharing`) | Models under a connection, their prices (temporal supersede-on-insert into `llm_model_price`), and who may use them — public, or granted per workspace. |
@@ -65,7 +65,7 @@ when releasing the brake. Provider gateways enforce it independently from result
 ## Recent sign-in gate
 
 Instance-admin actions that change access require a completed sign-in younger than `hephaestus.auth.step-up-max-age` (`HEPHAESTUS_AUTH_STEP_UP_MAX_AGE`, default 5m).
-These actions include app-role changes, block and unblock, force sign-out, user views, login-provider mutations, and LLM connection registration or removal.
+These actions include app-role changes, block and unblock, force sign-out, the read of a support share, login-provider mutations, and LLM connection registration or removal.
 The same requirement applies to identity attachment for every user.
 A new link is a permanent second way into the account.
 
@@ -136,63 +136,48 @@ A refused action is never replayed after confirmation.
 The SPA reopens the action for the operator to review and submit again.
 A queued privileged write is exactly what an attacker would want confirmation to unlock.
 
-## Read-only user views
+## Support shares
 
-**Instance administration → Workspaces → View as user**, then **View as user** on an account, opens the normal workspace app as that account member.
-The instance administrator remains authenticated as themselves.
-The selected identity is an account, including an unclaimed roster account.
-Its provider mirrors remain source attribution rather than sign-in principals.
-A view-as read does not record the developer's first read of private feedback.
+No staff route returns a person's private content ([ADR 0164](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0164-staff-see-no-private-content-and-support-starts-with-the-person.md)).
+`StaffRoutesReturnNoPrivateContentTest` enforces this rule.
+It collects the response types of the person's own routes, such as `/conversation`, `/practice-profile` and `/user/support-shares`, and each `@PrivateContent` type.
+Then it walks the response of every instance-admin and workspace-admin handler, and fails when one of them reaches such a type.
+Its one exception is `SupportShareAdminController`.
+The test also fails when a class named for a removed staff view of one person, or for impersonation, exists.
 
-The browser keeps the selected workspace, account ID, and reason in the tab's session storage.
-When a view starts or exits, the app reloads so cached results cannot cross identities.
-When it loads the current account, it drops a stored view opened by another account.
-`applyUserViewHeaders` adds `X-User-View-Workspace`, `X-User-View-User`, and the reason header to every request.
-It excludes the administrator's own sign-in, account, consent, feature-flag, and identity reads.
+A person shares one of their own turns with one active instance admin:
 
-During a view, the administrator's feature flags do not apply.
-A banner names the viewed user and offers an exit.
-The account menu still names the administrator, whom it signs out.
+| Route | Who | What it does |
+| --- | --- | --- |
+| `POST /workspaces/{slug}/support-shares/turns/{turnId}/preview` (`previewSupportShare`) | The person | Returns the diagnostics of the turn and the instance admins who can receive the share. If the person asks for the messages, it also returns them and their SHA-256 digest |
+| `POST /workspaces/{slug}/support-shares/turns/{turnId}` (`createSupportShare`) | The person | Creates the share for 7 days. It rebuilds the digest and answers 409 when the messages changed after the preview |
+| `GET /user/support-shares` (`listOwnSupportShares`) | The person | Lists their shares with state, recipient, read count and last read |
+| `DELETE /user/support-shares/{id}` (`revokeSupportShare`) | The person | Revokes the share. It stays in the list as revoked |
+| `GET /admin/support-shares` (`listReceivedSupportShares`) | The recipient | Lists the shares that the recipient can read now, without messages |
+| `GET /admin/support-shares/{id}` (`readSupportShare`) | The recipient | Reads one share. Each read counts |
 
-The selection endpoints use the `User view` tag in `server/openapi.yaml`.
-All are `GET` under `/workspaces/{slug}/user-view/users`.
-Like every instance-administrator controller, all require `@PreAuthorize("hasAuthority('app_admin')")`.
-Each request checks token authority and session revocation.
-Demotion and deletion revoke sessions.
+The `support_share` row holds no text: only ids, times, the digest, the read count and the last read.
+A read renders the turn from its current rows.
+It shows the messages only while their digest matches the stored digest.
+A deleted, erased or changed message is withheld, and no extra erasure step is necessary.
+One `UPDATE` counts the read and checks the recipient, the revocation and the expiry.
+Then the read binds the person who shared as the owner of its transaction (`@StoredOwnerOperation`) and reads the turn.
 
-Every selection handler addressed at a `{userId}` carries `@UserViewRead` (`@RequiresRecentSignIn` + `@Audited(AUTH_EVENT, "USER_VIEW")`).
-`UserViewArchitectureTest` fails the build for a `/user-view` handler that is not a `GET` or names `{userId}` without this annotation.
-`UserViewAuthorizationConfig` advises the annotation after the [recent sign-in gate](#recent-sign-in-gate).
-Thus, a refused confirmation leaves no successful `USER_VIEW` record.
+The diagnostics of a turn hold no text:
 
-Before the handler runs, it requires the `X-User-View-Reason` header, encoded as percent-encoded UTF-8.
-`UserViewAccessService` accepts 1–500 decoded characters, excluding control and format characters.
-It resolves the viewed member through `IdentityRepository` and commits the row.
-If the row does not commit, it answers 503.
-`OpenAPIConfiguration.userViewReasonHeader` declares the header on every such operation, so the generated client requires it.
+- The turn ID and the run ID.
+- The surface, the status and the attempt.
+- The failure reason as a closed kind, the failed model call and its provider status.
+- The queue, start and finish times.
+Account erasure deletes the shares of the account and the shares addressed to it.
 
-Before every other rule, `SecurityConfig` admits a request with a view header only as an instance administrator's `GET`.
-`UserViewSessionFilter` answers 403 for a route outside `READ_PATHS`.
-It answers 404 for a workspace in the path other than the viewed one.
-Both checks occur before any audit row.
-A teammate's profile remains readable as it is for the member, and its row records that read.
+### Earlier user views
 
-Every request requires a [recent sign-in](#recent-sign-in-gate).
-It resolves the human member and commits the `USER_VIEW` row before the handler runs.
-If the row does not commit, it answers 503.
-`WorkspaceContextFilter` gives the request the member's workspace roles and SCM actor ID, never instance-admin elevation.
-The in-app feedback read does not mark feedback delivered during a view.
-
-When the sign-in window expires, the SPA opens the access confirmation.
-A new sign-in returns to the same page with the view intact.
-
-This is a view of existing content, not a user login. It does not enter onboarding, choose personal
-settings or create an account, so it cannot reproduce the member's first-login experience.
-
-A successful `USER_VIEW` row records authorization to attempt a read, not proof that the handler returned content.
-A missing result can still produce a 404 after the row commits.
-Conversation routes return 403 during a user view. Only the signed-in owner can read their conversation.
-The row carries these fields:
+The read-only user view is removed.
+`SecurityConfig` refuses a request that still carries `X-User-View-Workspace` or `X-User-View-Account` with 403.
+An open tab of the old page cannot show the administrator's own pages under another person's name.
+Earlier `USER_VIEW` rows stay in `auth_event` as the record of those reads, and no code writes a new one.
+They carry these fields:
 
 - `acting_account_id` = the instance administrator.
 - `account_id` = the acting administrator.
@@ -201,9 +186,6 @@ The row carries these fields:
 - `details` = `{"reason": …, "read": "<request path?query>"}`.
 
 `AccountPurger` nulls `ip_inet`, `user_agent`, and `details` when the erased account is either recorded account or the recorded viewed account.
-Thus, it runs before deletion of that account's identity links.
-The read budget is a [setting](/admin/configuration-readiness#session-deadlines).
-[ADR 0017](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0017-replace-keycloak-with-spring-native-auth.md#update--2026-09-11) explains why this does not use Spring Security's `SwitchUserFilter`.
 
 ## Elevated workspace access
 
@@ -221,7 +203,7 @@ Downstream code reads the flag from this context, not an argument.
 - `auth_event` gains a **`WORKSPACE_ELEVATION`** row.
   It marks an access *window*, not a request.
   `WorkspaceElevationAuditAdapter` de-duplicates per `(account, workspace)` for 15 minutes in a bounded per-process cache.
-  Thus, workspace reads do not obscure the user-view and role-change events that the viewer exists to show.
+  Thus, workspace reads do not obscure the role-change events that the viewer exists to show.
   The adapter claims the cache only after it writes the row.
   Eviction or a second replica can add a duplicate marker.
   An extra window marker is harmless, but a lost marker is not.
@@ -232,9 +214,7 @@ Downstream code reads the flag from this context, not an argument.
 
 Both admin consoles surface it, and `GET /admin/audit/export` carries it alongside the viewed-user identifier in CSV exports.
 
-The flag does not replace the viewed-user identifier: elevated workspace administration and a
-private user view are different permissions. `false` means "no elevation recorded", not "the actor
-was a member": rows written before the flag existed all read `false`.
+`false` means "no elevation recorded", not "the actor was a member": rows written before the flag existed all read `false`.
 
 ## LLM governance
 

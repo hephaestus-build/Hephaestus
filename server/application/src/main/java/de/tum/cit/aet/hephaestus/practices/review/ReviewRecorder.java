@@ -5,12 +5,14 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAudience;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequest;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequested;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewVersionKind;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries.ReviewWorkspace;
 import java.time.Clock;
 import java.util.UUID;
@@ -60,6 +62,13 @@ class ReviewRecorder {
                 .itemVersion(pinned.version().value())
                 .baseVersion(pinned.version().baseVersion())
                 .origin(request.origin())
+                .setupId(request.setupId())
+                .versionKind(ReviewVersionKind.ofOlder(request.kind()))
+                .audience(
+                        request.audience() != null
+                                ? request.audience()
+                                : ReviewAudience.ofOlder(request.kind(), request.origin()))
+                .audienceTeamId(request.audienceTeamId())
                 .eventId(request.eventId())
                 .batchId(request.batchId())
                 .requestedById(request.requestedById())

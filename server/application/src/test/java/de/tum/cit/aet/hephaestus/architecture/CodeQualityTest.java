@@ -151,6 +151,8 @@ class CodeQualityTest extends HephaestusArchitectureTest {
             // Repository native SQL methods require individual @Param annotations and cannot use
             // parameter objects. These are atomic upsert operations that map directly to DB columns.
             Set<String> nativeSqlRepositoryMethods = Set.of(
+                    "PracticeAdviceRevisionRepository.insertWritten",
+                    "PracticeAdviceSourceRepository.insertSource",
                     "AgentActionRepository.insertAdmitted",
                     "AgentActionRepository.insertExecuting",
                     "ActivityEventRepository.insertIfAbsent",
@@ -482,6 +484,8 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     // capturable when disabled.
                     "TurnContextLoads", // Context loaders are optional beans of each integration; a server
                     // without one, or with Git mirrors off, still serves the folder's documents
+                    "MentorIntake", // MentorAuthorization has no implementation until its adapter is wired; an absent
+                    // port opens no request
                     "InstanceLlmSettingsService", // LlmSettingsAudit's sole impl is @ConditionalOnServerRole, but this
                     // service is also consumed by the ungated Workspace{Llm}Service pair
                     // (BYO gate check) which load on every runtime role

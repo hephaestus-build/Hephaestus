@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackCopyCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewFeedbackDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.response.FeedbackResponseRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
-import de.tum.cit.aet.hephaestus.practices.review.PerPersonResults;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewPersonDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
@@ -43,7 +42,6 @@ public class FeedbackListReadQuery {
     private final FeedbackResponseRepository responses;
     private final FeedbackVisibilityService visibility;
     private final ObjectMapper mapper;
-    private final PerPersonResults perPerson;
 
     public Page<ReviewFeedbackDTO> list(long workspaceId, FeedbackQueryFilter filter, Pageable pageable) {
         var page = queries.page(
@@ -64,7 +62,6 @@ public class FeedbackListReadQuery {
     }
 
     private Facts facts(long workspaceId, List<Feedback> feedback) {
-        boolean named = perPerson.shown(workspaceId);
         var ids = feedback.stream().map(Feedback::getId).toList();
         var copyFacts = copies.copyCounts(workspaceId, ids).stream()
                 .collect(Collectors.groupingBy(
@@ -86,20 +83,22 @@ public class FeedbackListReadQuery {
                 references.developers(
                         workspaceId,
                         feedback.stream()
-                                .filter(row -> named(row, named))
+                                .filter(FeedbackListReadQuery::named)
                                 .map(Feedback::getDeveloperId)
                                 .distinct()
                                 .toList()),
-                named,
                 basis.readAll(workspaceId, ids),
                 copyFacts,
                 visibility.withdrawnAt(workspaceId, ids).keySet(),
                 disagreed);
     }
 
-    /** Feedback on the work always names its developer: approving it authorizes a comment to them. */
-    private static boolean named(Feedback row, boolean perPersonShown) {
-        return perPersonShown || row.getDestination() == FeedbackDestination.ON_WORK;
+    /**
+     * Only feedback on the work names its developer, as the work itself does, and approving it authorizes a comment to
+     * them. No other staff read names a person (ADR 0125).
+     */
+    private static boolean named(Feedback row) {
+        return row.getDestination() == FeedbackDestination.ON_WORK;
     }
 
     private static CopyFacts copyFacts(List<FeedbackCopyRepository.CopyCount> rows) {
@@ -127,7 +126,7 @@ public class FeedbackListReadQuery {
                 id,
                 row.getReviewId(),
                 row.getItemId() == null ? null : facts.items().get(row.getItemId()),
-                named(row, facts.perPersonShown()) ? facts.developers().get(row.getDeveloperId()) : null,
+                named(row) ? facts.developers().get(row.getDeveloperId()) : null,
                 row.getDestination(),
                 row.getState(),
                 row.getStopReason(),
@@ -153,8 +152,6 @@ public class FeedbackListReadQuery {
     private record Facts(
             Map<Long, ItemRefDTO> items,
             Map<Long, ReviewPersonDTO> developers,
-            // Per row: one developer's feedback on the work and on their practice page share an id.
-            boolean perPersonShown,
             Map<UUID, FeedbackBasisRead.Snapshot> basis,
             Map<UUID, CopyFacts> copies,
             Set<UUID> withdrawn,

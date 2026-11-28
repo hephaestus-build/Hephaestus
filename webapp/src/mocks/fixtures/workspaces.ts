@@ -22,7 +22,6 @@ export function workspaceListItem(
 		practicesEnabled: false,
 		publishesPublicActivity: false,
 		// On, as in every workspace that ran practice reviews before the setting existed.
-		perPersonResultsForAdmins: true,
 		linkHosts: [],
 		...overrides,
 	};

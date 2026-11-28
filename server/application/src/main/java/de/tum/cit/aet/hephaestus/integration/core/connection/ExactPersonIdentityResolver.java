@@ -5,7 +5,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceIdentityContributor;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
+import de.tum.cit.aet.hephaestus.core.security.ProviderNamespace;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderPersonLookup;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -164,14 +164,11 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
                     .filter(provider -> provider.id() == identity.providerId())
                     .findFirst()
                     .orElseThrow(() -> invalid("The provider instance id does not exist"));
-            var origin = ScmOrigin.of(selected.serverUrl())
-                    .orElseThrow(() ->
-                            conflict("The provider instance has no valid origin. Repair its exact instance key."));
+            if (ProviderNamespace.of(selected.type(), selected.serverUrl()).isEmpty())
+                throw conflict("The provider instance has no valid origin. Repair its exact instance key.");
             for (var candidate : instances) {
                 if (candidate.type().equals(selected.type())
-                        && ScmOrigin.of(candidate.serverUrl())
-                                .filter(origin::equals)
-                                .isPresent()) {
+                        && ProviderNamespace.same(selected.type(), selected.serverUrl(), candidate.serverUrl())) {
                     identities.add(new PersonIdentity(candidate.id(), identity.subject(), identity.teamId()));
                 }
             }

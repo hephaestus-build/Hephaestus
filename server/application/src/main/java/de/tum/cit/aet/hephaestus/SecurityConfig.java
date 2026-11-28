@@ -10,9 +10,7 @@ import de.tum.cit.aet.hephaestus.core.auth.web.PublicUsageReadRequestMatcher;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.core.security.HostAddresses;
 import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
-import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
-import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.core.web.ProblemResponse;
 import de.tum.cit.aet.hephaestus.core.web.RequestReference;
@@ -67,6 +65,7 @@ import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.util.matcher.AndRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestHeaderRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -334,11 +333,12 @@ public class SecurityConfig {
         }
 
         http.authorizeHttpRequests(requests -> {
-            // A user view is an instance administrator's GET and nothing else, decided before any permit below.
-            // A CORS preflight only names these headers, never sends them, so it is not a view.
-            requests.requestMatchers(UserViewContextHolder.USER_VIEW_READ)
-                    .hasAuthority(SecurityUtils.APP_ADMIN_AUTHORITY);
-            requests.requestMatchers(UserViewContextHolder.USER_VIEW_REQUEST).denyAll();
+            // View as user sent these headers. A tab still open on it is refused, so it never shows the
+            // administrator's own pages under another person's name.
+            requests.requestMatchers(new OrRequestMatcher(
+                            new RequestHeaderRequestMatcher("X-User-View-Workspace"),
+                            new RequestHeaderRequestMatcher("X-User-View-Account")))
+                    .denyAll();
             // CORS preflight requests must be permitted for cross-origin requests to work.
             // Without this, OPTIONS requests are rejected with 403 before CORS headers can be added.
             requests.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
@@ -544,9 +544,6 @@ public class SecurityConfig {
                 "X-Requested-With",
                 "Origin",
                 "X-XSRF-TOKEN",
-                UserViewContextHolder.REASON_HEADER,
-                UserViewContextHolder.WORKSPACE_HEADER,
-                UserViewContextHolder.ACCOUNT_HEADER,
                 // Every endpoint that hands out an ETag reads it back from If-Match (EntityTagPrecondition); a
                 // header not listed here never leaves the browser when the SPA runs on another origin, as in dev.
                 HttpHeaders.IF_MATCH));

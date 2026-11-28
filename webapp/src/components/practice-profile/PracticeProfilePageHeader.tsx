@@ -46,10 +46,8 @@ export interface PracticeProfilePageHeaderProps {
 	practiceCount: number;
 	groupCount: number;
 	isLoading?: boolean;
-	/** The control that starts the guided tour; absent where the reader cannot take it, such as in a user view. */
+	/** The control that starts the guided tour; absent where the reader cannot take it. */
 	tourAction?: ReactNode;
-	/** Whether this workspace shows its admins practice results per person; absent while unknown. */
-	perPersonResults?: boolean;
 }
 
 export const PRACTICE_PROFILE_TITLE = "Practice profile";
@@ -63,26 +61,15 @@ export const PRACTICE_PROFILE_INTRO =
 
 /**
  * Who can see what on the Practice profile. The (i) beside the intro and the guided tour both say it,
- * from here. What workspace admins see depends on the workspace's per-person results setting; while
- * it is unknown, as in the tour, the sentence names the setting instead.
+ * from here.
  */
-export function profileAudience(perPersonResults?: boolean): string {
-	let admins =
-		"Workspace admins see practice reviews, with your name only where per-person results are on for the workspace.";
-	if (perPersonResults === true) {
-		admins =
-			"In this workspace, admins see your practice results with your name, earlier ones too, because per-person results are on.";
-	} else if (perPersonResults === false) {
-		admins =
-			"In this workspace, admins see practice results with no name and cannot filter them by person. Each result still shows the work it is about.";
-	}
-	return `Your Practice profile is yours. Feedback on a pull request is visible to everyone who can see that pull request. ${admins} Instance admins can open a read-only view.`;
-}
+export const PROFILE_AUDIENCE =
+	"Your Practice profile is yours. No admin can open it. Feedback on a pull request is visible to everyone who can see that pull request. Workspace admins see practice results on the work, with no name. They see why you disagree with a result for 30 days, so they can correct it.";
 
 /** Who can see the page: a fact the reader keeps, so it stays beside the intro (onboarding rule 9). */
-const audienceInfo = (perPersonResults?: boolean) => (
+const AUDIENCE_INFO = (
 	<InfoTip label="Who can see this page">
-		<p>{profileAudience(perPersonResults)}</p>
+		<p>{PROFILE_AUDIENCE}</p>
 	</InfoTip>
 );
 
@@ -117,7 +104,6 @@ export function PracticeProfilePageHeader({
 	groupCount,
 	isLoading = false,
 	tourAction,
-	perPersonResults,
 }: PracticeProfilePageHeaderProps) {
 	return (
 		<header className="flex flex-col gap-3">
@@ -133,7 +119,7 @@ export function PracticeProfilePageHeader({
 					</div>
 				</div>
 				<p className="max-w-2xl text-sm text-muted-foreground">
-					{PRACTICE_PROFILE_INTRO} {audienceInfo(perPersonResults)}
+					{PRACTICE_PROFILE_INTRO} {AUDIENCE_INFO}
 				</p>
 			</div>
 			{/* The action's row holds its place while the page loads, so nothing under it moves when it comes. */}

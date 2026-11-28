@@ -158,7 +158,7 @@ export const EmptyInitial: Story = {
 	args: { state: loaded([]), hasFilter: false },
 	play: async ({ canvas }) => {
 		canvas.getByText("No events yet");
-		canvas.getByText(/Sign-ins, user views, role changes/iu);
+		canvas.getByText(/Sign-ins, role changes/iu);
 	},
 };
 
@@ -251,7 +251,7 @@ export const ColumnCountMatchesHeader: Story = {
 	},
 };
 
-// Unclaimed accounts still require their account id for a user view.
+// A user view recorded before the feature was removed still names the account it read.
 export const UnclaimedAccountView: Story = {
 	args: {
 		state: loaded([
@@ -274,7 +274,7 @@ export const UnclaimedAccountView: Story = {
 		canvas.getByText("High-risk event:");
 		await expect(canvas.getByText("Elevated")).toBeVisible();
 		await expect(
-			canvas.getByRole("button", { name: "View details for User view authorized, Grace Hopper" }),
+			canvas.getByRole("button", { name: "View details for User view (removed), Grace Hopper" }),
 		).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: /^View details for/u }));
 		await expectSettledVisible(await screen.findByText("Viewed account"));

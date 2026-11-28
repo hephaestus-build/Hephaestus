@@ -6,7 +6,7 @@ import { ReviewDayTable } from "@/components/practice-trace/ReviewDayTable";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { levelsOpenedBy } from "@/test/detail-stack";
 
-import { reviewAccounts, reviews } from "./fixtures";
+import { reviews } from "./fixtures";
 import { REQUEST_BLOCKED } from "./RequestReviewAction";
 import { REVIEW_SUMMARY_COLUMNS, ReviewSummaryRow } from "./ReviewSummaryRow";
 
@@ -28,7 +28,6 @@ const requested: ReviewSummary = {
 	id: "11111111-2222-2222-2222-222222222222",
 	origin: "REQUEST",
 	startedBy: null,
-	requestedBy: reviewAccounts.grace,
 };
 const requestReview = fn();
 
@@ -69,39 +68,19 @@ export const Complete: Story = {
 	},
 };
 
-/** A requested review names its requester as the result tables name a developer: face and name. */
+/** A requested review names its origin, never who asked: a staff list names nobody (ADR 0125). */
 export const Requested: Story = {
 	args: { review: requested },
 	play: async ({ canvas }) => {
-		const name = canvas.getByText("Grace Hopper");
-		// The face sits in the same cell as the name, as in the Developer column of Results.
-		await expect(name.closest("td")?.querySelector('[data-slot="avatar"]')).not.toBeNull();
-		await expect(canvas.queryByText("Request")).toBeNull();
-	},
-};
-
-/** A requester the account does not name keeps the placeholder face and the developer fallback. */
-export const RequestedByAnUnnamedAccount: Story = {
-	args: {
-		review: {
-			...requested,
-			requestedBy: {
-				...reviewAccounts.grace,
-				avatarUrl: undefined,
-				displayName: undefined,
-				identities: [],
-			},
-		},
-	},
-	play: async ({ canvas }) => {
-		const name = canvas.getByText("Unnamed developer");
-		await expect(name.closest("td")?.querySelector('[data-slot="avatar"]')).not.toBeNull();
+		canvas.getByText("Requested");
+		await expect(canvas.queryByText("Grace Hopper")).toBeNull();
+		await expect(canvas.queryByRole("img", { name: /Grace/u })).toBeNull();
 	},
 };
 
 /** A scheduled review names its origin, not a person. */
 export const Scheduled: Story = {
-	args: { review: { ...completed, origin: "SCHEDULE", requestedBy: null } },
+	args: { review: { ...completed, origin: "SCHEDULE" } },
 	play: async ({ canvas }) => {
 		canvas.getByText("Scheduled");
 		await expect(canvas.queryByText("Grace Hopper")).toBeNull();
@@ -138,7 +117,12 @@ export const Continuing: Story = {
 		review: {
 			...running,
 			status: "QUEUED",
-			progress: { practicesEnded: 76, practicesTotal: 200, continuing: true },
+			progress: {
+				practicesEnded: 76,
+				practicesTotal: 200,
+				continuing: true,
+				stage: "CONTINUING",
+			},
 		},
 	},
 	play: async ({ canvas }) => {

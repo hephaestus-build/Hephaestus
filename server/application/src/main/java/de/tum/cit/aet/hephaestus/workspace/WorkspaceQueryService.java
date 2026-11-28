@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
-import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.settings.spi.PublicActivityPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionMetadataQuery;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -85,16 +84,13 @@ public class WorkspaceQueryService {
 
     /**
      * Builds {@link WorkspaceListItemDTO}s for every workspace accessible to the current
-     * authenticated user. During a user view, only the viewed workspace.
+     * authenticated user.
      */
     public List<WorkspaceListItemDTO> findAccessibleWorkspaceListItems() {
         boolean publicActivityAllowed = publicActivityPolicy.allowed();
-        var viewed = UserViewContextHolder.get();
-        var ids = viewed == null
-                ? SecurityUtils.getCurrentAccountId()
-                        .map(workspaceMembershipRepository::findListedWorkspaceIdsByAccountId)
-                        .orElseGet(List::of)
-                : List.of(viewed.workspaceId());
+        var ids = SecurityUtils.getCurrentAccountId()
+                .map(workspaceMembershipRepository::findListedWorkspaceIdsByAccountId)
+                .orElseGet(List::of);
         if (ids.isEmpty()) return List.of();
         var workspaces = workspaceRepository.findListDataByIds(ids);
         var workspaceIds = workspaces.stream().map(WorkspaceListData::id).toList();

@@ -9,7 +9,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceIdentityContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournal;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PrivacyJournalKind;
-import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
+import de.tum.cit.aet.hephaestus.core.security.ProviderNamespace;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -67,11 +67,14 @@ public class IdentityRestrictionService implements PersonProcessingSuppression {
     static void inheritProviderControls(JdbcOperations jdbc, long providerId) {
         var instance = jdbc.query(
                 "SELECT type,server_url FROM identity_provider WHERE id=?",
-                (rs, row) -> new ProviderInstance(
-                        Objects.requireNonNull(rs.getString(1)),
-                        ScmOrigin.of(rs.getString(2))
-                                .orElseThrow(() -> new IllegalStateException(
-                                        "Provider controls require" + " an exact valid" + " origin"))),
+                (rs, row) -> {
+                    String type = Objects.requireNonNull(rs.getString(1));
+                    return new ProviderInstance(
+                            type,
+                            ProviderNamespace.of(type, rs.getString(2))
+                                    .orElseThrow(() -> new IllegalStateException(
+                                            "Provider controls require" + " an exact valid" + " origin")));
+                },
                 providerId);
         if (instance.size() != 1) throw new IllegalStateException("The exact provider namespace does not exist");
         var target = instance.getFirst();
@@ -82,7 +85,8 @@ public class IdentityRestrictionService implements PersonProcessingSuppression {
                         JOIN identity_restriction s ON s.provider_id=p.id
                         WHERE p.type=? AND p.id<>?
                         """,
-                        (rs, row) -> new ProviderAlias(rs.getLong(1), ScmOrigin.of(rs.getString(2))),
+                        (rs, row) ->
+                                new ProviderAlias(rs.getLong(1), ProviderNamespace.of(target.type(), rs.getString(2))),
                         target.type(),
                         providerId)
                 .stream()
@@ -148,26 +152,20 @@ public class IdentityRestrictionService implements PersonProcessingSuppression {
 
     @Override
     public boolean isSuppressed(long providerId, String subject, @Nullable String teamId) {
-        // A new provider row must not reset a permanent native control. Compare exact network
-        // origins with the same parser as identity resolution, never with URL text or display data.
+        // A new provider row must not reset a permanent native control. Compare provider namespaces
+        // with the same parser as identity resolution, never with URL text or display data.
         return jdbc
                 .query(
                         """
-                        SELECT p.server_url,requested.server_url
+                        SELECT p.server_url,requested.server_url,p.type
                         FROM identity_provider requested
                         JOIN identity_provider p ON p.type=requested.type
                         JOIN identity_restriction s ON s.provider_id=p.id
                         WHERE requested.id=? AND s.provider_user_key=? AND s.kind='ERASED'
                           AND (s.team_key=? OR (p.type='OUTLINE' AND s.team_key=''))
                         """,
-                        (rs, row) -> {
-                            var requestedOrigin = ScmOrigin.of(rs.getString(2));
-                            return ScmOrigin.of(rs.getString(1))
-                                    .filter(origin -> requestedOrigin
-                                            .filter(origin::equals)
-                                            .isPresent())
-                                    .isPresent();
-                        },
+                        (rs, row) -> ProviderNamespace.same(
+                                Objects.requireNonNull(rs.getString(3)), rs.getString(1), rs.getString(2)),
                         providerId,
                         subject,
                         Objects.requireNonNullElse(teamId, ""))
@@ -213,7 +211,7 @@ public class IdentityRestrictionService implements PersonProcessingSuppression {
         if (accountIds.isEmpty()) return Set.of();
         return new NamedParameterJdbcTemplate(jdbc)
                         .query("""
-            SELECT a.id, p.server_url, requested.server_url, a.status IN ('DELETING','DELETED') AS deleting
+            SELECT a.id, p.server_url, requested.server_url, a.status IN ('DELETING','DELETED') AS deleting, p.type
             FROM account a
             LEFT JOIN identity i ON i.account_id=a.id
             LEFT JOIN identity_provider requested ON requested.id=i.provider_id
@@ -223,13 +221,9 @@ public class IdentityRestrictionService implements PersonProcessingSuppression {
               AND (s.team_key=i.team_key OR (p.type='OUTLINE' AND s.team_key=''))
             WHERE a.id IN (:accountIds) AND (a.status IN ('DELETING','DELETED') OR s.id IS NOT NULL)
             """, Map.of("accountIds", accountIds), (rs, row) -> {
-                            var requestedOrigin = ScmOrigin.of(rs.getString(3));
+                            String type = rs.getString(5);
                             boolean suppressed = rs.getBoolean(4)
-                                    || ScmOrigin.of(rs.getString(2))
-                                            .filter(origin -> requestedOrigin
-                                                    .filter(origin::equals)
-                                                    .isPresent())
-                                            .isPresent();
+                                    || (type != null && ProviderNamespace.same(type, rs.getString(2), rs.getString(3)));
                             return new AccountRestriction(rs.getLong(1), suppressed);
                         })
                         .stream()

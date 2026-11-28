@@ -1,5 +1,5 @@
-import { ArrowUpIcon, SquareIcon } from "lucide-react";
-import { type ReactNode, type SubmitEvent, use, useRef, useState } from "react";
+import { ArrowUpIcon, LockIcon, SquareIcon, UsersIcon } from "lucide-react";
+import { type ReactNode, type SubmitEvent, use, useId, useRef, useState } from "react";
 
 import {
 	InputGroup,
@@ -15,6 +15,32 @@ import { rendersContent } from "@/lib/react-node";
 import { hasText } from "@/lib/text";
 
 import { ComposerDescription } from "./composer-description";
+
+/**
+ * Who reads what is sent from this composer. It is fixed for the composer: a draft never moves to another audience,
+ * because each audience has its own composer and its own draft.
+ */
+export type ComposerAudience = { kind: "PRIVATE" } | { kind: "TEAM"; teamName: string };
+
+function AudienceLabel({ audience, id }: { audience: ComposerAudience; id: string }) {
+	const Icon = audience.kind === "PRIVATE" ? LockIcon : UsersIcon;
+	// The icon keeps its size while a long team name shortens.
+	return (
+		<span
+			id={id}
+			className="inline-flex max-w-full min-w-0 items-center gap-1 text-xs text-muted-foreground"
+		>
+			<Icon aria-hidden className="size-3.5 shrink-0" />
+			{audience.kind === "PRIVATE" ? (
+				"Only you"
+			) : (
+				<span className="truncate">
+					Team <bdi>{audience.teamName}</bdi>
+				</span>
+			)}
+		</span>
+	);
+}
 
 export interface ConversationComposerProps {
 	/** Names the field, so the main composer and a thread's are told apart on one screen. */
@@ -34,6 +60,8 @@ export interface ConversationComposerProps {
 	draftKey?: string;
 	/** Told whenever the unsent text changes, including when it is sent and the field empties. */
 	onDraftChange?: (text: string) => void;
+	/** Who reads what is sent, shown beside the controls for as long as the composer shows. */
+	audience?: ComposerAudience;
 }
 
 /**
@@ -50,7 +78,16 @@ const TOUCH = "(pointer: coarse)";
  * controls; where they do not fit side by side, as a long page name with Stop in a phone's panel,
  * the controls wrap below the context, and the context's name shortens before it leaves the row.
  */
-export function ConversationComposer({
+export function ConversationComposer(props: ConversationComposerProps) {
+	const { draftKey, audience } = props;
+	const audienceKey =
+		audience?.kind === "TEAM" ? `TEAM:${audience.teamName}` : (audience?.kind ?? "");
+	// One instance per place and audience: the text is read from the draft only when the field mounts, so a composer
+	// that moved to another place or audience would otherwise carry the old text, and Enter would send it there.
+	return <ComposerForm key={`${draftKey ?? ""}\u0000${audienceKey}`} {...props} />;
+}
+
+function ComposerForm({
 	label,
 	placeholder,
 	onSend,
@@ -59,7 +96,9 @@ export function ConversationComposer({
 	focusOnMount = false,
 	draftKey,
 	onDraftChange,
+	audience,
 }: ConversationComposerProps) {
+	const audienceId = useId();
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const [input, setDraft] = useState(() => (draftKey === undefined ? "" : readDraft(draftKey)));
 	const setInput = (text: string) => {
@@ -95,7 +134,11 @@ export function ConversationComposer({
 					dir="auto"
 					ref={textareaRef}
 					aria-label={label}
-					aria-describedby={describedBy}
+					aria-describedby={
+						[audience === undefined ? undefined : audienceId, describedBy]
+							.filter((id) => id !== undefined)
+							.join(" ") || undefined
+					}
 					className="max-h-48 min-h-0"
 					placeholder={placeholder}
 					value={input}
@@ -112,6 +155,7 @@ export function ConversationComposer({
 					autoFocus={focusOnMount}
 				/>
 				<InputGroupAddon align="block-end" className="flex-wrap">
+					{audience !== undefined && <AudienceLabel audience={audience} id={audienceId} />}
 					{rendersContent(context) && <div className="flex min-w-0 *:min-w-0">{context}</div>}
 					<div className="ml-auto flex items-center gap-1">
 						{stop && (

@@ -47,7 +47,7 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
     @Query("""
         SELECT new de.tum.cit.aet.hephaestus.workspace.WorkspaceListData(
             w.id, w.workspaceSlug, w.displayName, w.status, w.accountLogin, w.createdAt,
-            w.features.practicesEnabled, w.publicActivityEnabled, w.perPersonResultsForAdmins)
+            w.features.practicesEnabled, w.publicActivityEnabled)
         FROM Workspace w
         WHERE w.id IN :ids
         """)

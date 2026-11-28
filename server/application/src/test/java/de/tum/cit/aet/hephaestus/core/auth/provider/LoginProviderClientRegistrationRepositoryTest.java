@@ -56,8 +56,29 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
         return p;
     }
 
+    @Test
+    void shouldNotOfferAnOidcProviderThatThisReleaseOnlyReads() {
+        LoginProviderRepository repo = mock(LoginProviderRepository.class);
+        LoginProvider github = provider("github", LoginProvider.ProviderType.GITHUB, "https://github.com", "read:user");
+        LoginProvider oidc = provider(
+                "school",
+                LoginProvider.ProviderType.OIDC,
+                "https://login.example.org/realms/school",
+                "openid profile email");
+        when(repo.findByEnabledTrueOrderByDisplayNameAsc()).thenReturn(List.of(github, oidc));
+        when(repo.findByRegistrationId("school")).thenReturn(Optional.of(oidc));
+        var registrations = new LoginProviderClientRegistrationRepository(
+                repo, "https://hephaestus.build/api", OUTLINE_ORIGINS, ENDPOINTS, SECRETS);
+
+        assertThat(registrations.listRegistrations())
+                .extracting(ClientRegistration::getRegistrationId)
+                .containsExactly("github");
+        assertThat(registrations.findByRegistrationId("school")).isNull();
+    }
+
     @ParameterizedTest
-    @EnumSource(LoginProvider.ProviderType.class)
+    // An OIDC registration needs its issuer's discovery document; this release does not sign in through OIDC.
+    @EnumSource(value = LoginProvider.ProviderType.class, names = "OIDC", mode = EnumSource.Mode.EXCLUDE)
     void shouldPinCallbackToApexWhenAuthorizationRequestUsesTenantHost(LoginProvider.ProviderType type) {
         LoginProviderRepository repo = mock(LoginProviderRepository.class);
         when(repo.findByRegistrationId("provider"))

@@ -16,7 +16,6 @@ const mockWorkspace = {
 	createdAt: new Date("2025-01-15T00:00:00Z"),
 	practicesEnabled: true,
 	publishesPublicActivity: false,
-	perPersonResultsForAdmins: false,
 	linkHosts: [] as string[],
 } as const;
 
@@ -163,22 +162,6 @@ export const AdminUser: Story = {
 	},
 	play: async ({ canvas }) => {
 		canvas.getByText("Administration");
-	},
-};
-
-export const ReadOnlyUserView: Story = {
-	args: {
-		isAdmin: false,
-		isAppAdmin: false,
-		readOnly: true,
-		showConversation: false,
-		context: "main",
-	},
-	play: async ({ canvas }) => {
-		await expect(
-			canvas.queryByRole("link", { name: /^(?:Conversation|Ask Hephaestus)$/u }),
-		).not.toBeInTheDocument();
-		await expect(canvas.queryByText("User settings")).not.toBeInTheDocument();
 	},
 };
 

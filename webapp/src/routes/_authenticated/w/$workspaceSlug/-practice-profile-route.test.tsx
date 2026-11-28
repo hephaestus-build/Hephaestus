@@ -27,7 +27,6 @@ import { currentUser } from "@/mocks/fixtures/auth";
 import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
-import { clearUserView } from "@/runtime/user-view/session";
 import { detailResult, detailReview } from "@/stories/practice-detail-story-mock-data";
 import { bundledGuidance } from "@/stories/practice-guidance-story-mock-data";
 import {
@@ -49,7 +48,6 @@ import { STORY_NOW } from "@/stories/story-clock";
 import { nextFrame, pending } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter, loadRouteCode } from "@/test/router-harness";
-import { storeUserView } from "@/test/user-view";
 
 // Mounting the real route pulls in the whole app shell and its lazy modules.
 
@@ -413,20 +411,12 @@ describe("practice profile route", () => {
 		await waitFor(() => expect(document.activeElement).toBe(start));
 	});
 
-	it("tells the reader whether admins of this workspace see their results with their name", async () => {
-		server.use(
-			http.get("*/workspaces", () =>
-				HttpResponse.json([
-					workspaceListItem("acme", { practicesEnabled: true, perPersonResultsForAdmins: false }),
-				]),
-			),
-		);
+	it("tells the reader that no admin opens the page and admins see results with no name", async () => {
 		await renderProfile();
 
 		await userEvent.click(screen.getByRole("button", { name: "Who can see this page" }));
-		await screen.findByText(
-			/admins see practice results with no name and cannot filter them by person/u,
-		);
+		await screen.findByText(/No admin can open it\./u);
+		expect(screen.queryByText(/read-only view/u)).toBeNull();
 	});
 
 	it("does not offer the guided tour until the page has loaded", async () => {
@@ -435,16 +425,6 @@ describe("practice profile route", () => {
 		);
 		await renderProfile();
 		expect(screen.queryByRole("button", { name: "Take the tour" })).toBeNull();
-	});
-
-	it("keeps the guided tour out of a user view, even on a first visit", async () => {
-		localStorage.clear();
-		storeUserView({ workspaceSlug: "acme" });
-		await renderProfile();
-		await screen.findByRole("heading", { level: 1, name: "Practice profile" }, ROUTE_RENDER_WAIT);
-		expect(screen.queryByRole("button", { name: "Take the tour" })).toBeNull();
-		expect(screen.queryByRole("button", { name: "See how feedback comes about" })).toBeNull();
-		expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull();
 	});
 
 	it("stacks the list, a group and a practice in the detail param, one history entry each", async () => {
@@ -1073,7 +1053,6 @@ const observationPage = (id = completeObservation.id, slug = practice.slug) =>
 	`${PAGE}?detail=${encodeURIComponent(JSON.stringify([`practice:${slug}`]))}&practiceTab=results&observation=${id}`;
 
 describe("complete practice observations", () => {
-	afterEach(clearUserView);
 	it("shows every problem, available next step, evidence and recorded feedback link together", async () => {
 		server.use(
 			http.get("*/workspaces/:workspaceSlug/practices/results/:resultId", () =>
@@ -1148,21 +1127,6 @@ describe("complete practice observations", () => {
 			screen.getByRole("button", { name: /^The older observation waits for expansion/u }),
 		);
 		await waitFor(() => expect(reads).toStrictEqual([ownResult.id, olderId]));
-	});
-
-	it("keeps the selected observation read-only when an administrator views as its developer", async () => {
-		storeUserView({ workspaceSlug: "acme" });
-		server.use(
-			http.get("*/workspaces/:workspaceSlug/practices/results/:resultId", () =>
-				HttpResponse.json(completeObservation),
-			),
-		);
-		renderRouteAtWithRouter(observationPage());
-		const selected = await screen.findByRole("list", { name: "Reviews" }, ROUTE_RENDER_WAIT);
-		expect(within(selected).queryByRole("group", { name: /Your response/u })).toBeNull();
-		expect(within(selected).queryByRole("button", { name: "I fixed this" })).toBeNull();
-		expect(within(selected).getAllByRole("link", { name: /^Read comment \d/u })).toHaveLength(2);
-		clearUserView();
 	});
 
 	it("opens an exact older observation without fetching missing feed pages, then keeps one copy when history arrives", async () => {
@@ -1479,7 +1443,6 @@ const PRACTICE_PAGE = `${PAGE}?detail=${encodeURIComponent(JSON.stringify([group
 
 describe("the feedback an observation gave", () => {
 	afterEach(() => {
-		clearUserView();
 		vi.restoreAllMocks();
 	});
 
@@ -1793,8 +1756,7 @@ const responseControls = async () => {
 	};
 };
 
-// User view is read-only; every response control must stay absent.
-describe("practice profile in a user view", () => {
+describe("practice profile response controls", () => {
 	beforeEach(() => {
 		server.use(
 			http.get("*/workspaces/:workspaceSlug/practices/feedback/practice-page", () =>
@@ -1802,33 +1764,12 @@ describe("practice profile in a user view", () => {
 			),
 		);
 	});
-	afterEach(clearUserView);
 
 	it("offers the developer a rating and an answer on the card, and no response inside an observation", async () => {
 		// The feedback is answered where it is; the observation only says where it went.
 		await expect(responseControls()).resolves.toStrictEqual({
 			ratings: 1,
 			answers: 1,
-			responses: 0,
-		});
-	});
-
-	it("offers an administrator viewing as the developer no review to start", async () => {
-		storeUserView({ workspaceSlug: "acme" });
-		await renderProfile();
-		fireEvent.click(await openReviewsChip());
-
-		await screen.findByRole("button", { name: openReviewRowName }, ROUTE_RENDER_WAIT);
-		expect(screen.queryAllByRole("button", { name: /^Request (?:another )?review/u })).toHaveLength(
-			0,
-		);
-	});
-
-	it("offers an administrator viewing as the developer none of them", async () => {
-		storeUserView({ workspaceSlug: "acme" });
-		await expect(responseControls()).resolves.toStrictEqual({
-			ratings: 0,
-			answers: 0,
 			responses: 0,
 		});
 	});
@@ -2288,19 +2229,6 @@ describe("Get started", () => {
 		const card = await openGetStarted("0 of 1");
 		expect(within(card).queryByRole("link", { name: "Ask Hephaestus a question" })).toBeNull();
 	});
-
-	it("never shows in a user view, which reads someone else's page", async () => {
-		storeUserView({ workspaceSlug: "acme" });
-		try {
-			server.use(dayOneOverview(READY_REVIEW_READINESS));
-			await renderProfile();
-			await screen.findByText("No review of your work yet", undefined, ROUTE_RENDER_WAIT);
-			expect(screen.queryByRole("button", { name: /^Get started/u })).toBeNull();
-			expect(localStorage.getItem(GET_STARTED_RECORD)).toBeNull();
-		} finally {
-			clearUserView();
-		}
-	});
 });
 
 describe("a profile without feedback", () => {
@@ -2344,21 +2272,6 @@ describe("a profile without feedback", () => {
 		screen.getByRole("link", { name: "setup summary" });
 
 		expect([...adminPaths].filter((path) => !memberPaths.has(path))).toStrictEqual([]);
-	});
-
-	it("shows no admin page in a user view, even of a workspace admin", async () => {
-		storeUserView({ workspaceSlug: "acme" });
-		try {
-			server.use(
-				dayOneOverview({ ...READY_REVIEW_READINESS, blocker: "REVIEWS_OFF" }),
-				ownMembership("ADMIN"),
-			);
-			await renderProfile();
-			await screen.findByText("Practice reviews are off here", undefined, ROUTE_RENDER_WAIT);
-			expect(screen.queryByRole("link", { name: "setup summary" })).toBeNull();
-		} finally {
-			clearUserView();
-		}
 	});
 
 	it("sends a workspace admin whose work is outside the scope to the review scope", async () => {

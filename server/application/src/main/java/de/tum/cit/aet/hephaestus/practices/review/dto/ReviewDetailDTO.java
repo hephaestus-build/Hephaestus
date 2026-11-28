@@ -1,13 +1,13 @@
 package de.tum.cit.aet.hephaestus.practices.review.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import de.tum.cit.aet.hephaestus.core.auth.dto.AccountRefDTO;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewFeedbackCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewVersionKind;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
@@ -32,9 +32,6 @@ public record ReviewDetailDTO(
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
         ItemEventDTO startedBy,
-
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
-        AccountRefDTO requestedBy,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
         UUID batchId,
@@ -62,8 +59,26 @@ public record ReviewDetailDTO(
         GeneratedPathReviewDTO generatedPaths,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
-        ReviewProgressDTO progress) {
+        ReviewProgressDTO progress,
+
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
+        ReviewSetupRefDTO setup,
+
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) ReviewVersionKind versionKind,
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) ReviewAudienceDTO audience,
+
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
+        ReviewedVersionDTO reviewedVersion,
+
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) List<ReviewCoverageDTO> coverage,
+
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
+        ReviewChangeDTO change,
+
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) List<ReviewEvidenceDTO> evidence) {
     public ReviewDetailDTO {
         practices = List.copyOf(practices);
+        coverage = List.copyOf(coverage);
+        evidence = List.copyOf(evidence);
     }
 }

@@ -81,7 +81,6 @@ const enumValues = <T extends string>(allowed: readonly T[]) =>
 	multiValue.transform((values): T[] | undefined => narrowToEnum(values, allowed));
 
 const scope = {
-	developerId: positiveIdParam,
 	reviewId: uuidParam,
 	resultId: uuidParam,
 	problemId: uuidParam,
@@ -192,8 +191,6 @@ export function dateWindowQuery(search: { from?: string; to?: string }) {
 	};
 }
 
-const numericId = (id: string | undefined) => (id === undefined ? undefined : Number(id));
-
 function oneValue(values: string[] | undefined): string | undefined {
 	return values?.length === 1 ? values[0] : undefined;
 }
@@ -225,7 +222,6 @@ export function reviewsQuery(
 		kind: search.kind,
 		queueState: search.queueState,
 		itemId: search.itemId,
-		personId: numericId(search.developerId),
 		sort: search.order,
 	};
 }
@@ -239,7 +235,6 @@ export function feedbackQuery(
 		size,
 		itemId: search.itemId,
 		itemKind: search.itemKind,
-		personId: search.developerId,
 		state: search.state,
 		destination: search.destination,
 		stopReason:
@@ -263,7 +258,6 @@ export function resultsQuery(
 		size,
 		itemId: search.itemId,
 		itemKind: search.itemKind,
-		personId: numericId(search.developerId),
 		outcome: search.outcome,
 		severity: search.severity,
 		currentness: search.currentness,
@@ -285,7 +279,6 @@ export function problemsQuery(
 		resultId: search.resultId,
 		itemId: search.itemId,
 		itemKind: search.itemKind,
-		personId: numericId(search.developerId),
 		severity: search.severity,
 		currentness: search.currentness,
 		markedIncorrect: search.markedIncorrect,

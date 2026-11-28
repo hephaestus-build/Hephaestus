@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795766466792-1" author="hephaestus">
+        <comment>One decision per review and advice entry, so a retried review writes nothing twice (ADR 0160). Nothing writes it yet.</comment>
+        <createTable tableName="practice_advice_receipt">
+            <column name="advice_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="practice_advice_receiptPK"/>
+            </column>
+            <column name="review_id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="practice_advice_receiptPK"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="practice_advice_receiptPK"/>
+            </column>
+            <column name="person_account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="kind" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content_digest" type="BYTEA">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="written_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="practice_advice_receipt" baseColumnNames="advice_id,person_account_id,workspace_id" constraintName="sfk_practice_advice_receipt_advice" onDelete="CASCADE" referencedTableName="practice_advice" referencedColumnNames="id,person_account_id,workspace_id"/>
+        <createIndex tableName="practice_advice_receipt" indexName="idx_practice_advice_receipt_advice">
+            <column name="advice_id"/>
+            <column name="person_account_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1795766466792-2" author="hephaestus">
+        <comment>A receipt names its decision and the entry's version after it.</comment>
+        <sql>
+ALTER TABLE practice_advice_receipt ADD CONSTRAINT ck_practice_advice_receipt_kind CHECK (kind IN ('REVISE', 'RETIRE'));
+ALTER TABLE practice_advice_receipt ADD CONSTRAINT ck_practice_advice_receipt_digest CHECK (octet_length(content_digest) = 32 AND version &gt;= 1);
+        </sql>
+        <rollback>
+ALTER TABLE practice_advice_receipt DROP CONSTRAINT ck_practice_advice_receipt_digest;
+ALTER TABLE practice_advice_receipt DROP CONSTRAINT ck_practice_advice_receipt_kind;
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -22,6 +22,7 @@ const SCOPES = [
 	// Where the code lives.
 	"webapp",
 	"extension",
+	"figma-plugin",
 	"server",
 	"docs",
 

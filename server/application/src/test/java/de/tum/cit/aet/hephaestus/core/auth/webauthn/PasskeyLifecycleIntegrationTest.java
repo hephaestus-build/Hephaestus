@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.auth.mcp.McpAuthorizationFlow;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
-import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
@@ -310,45 +309,6 @@ class PasskeyLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isForbidden()
                 .expectBody(Void.class);
-        String stale = token(admin, Instant.now().minusSeconds(600));
-        client.get()
-                .uri(base + "/user-view/users/" + member.account().getId())
-                .header(HttpHeaders.COOKIE, cookie + "=" + stale)
-                .header(UserViewContextHolder.REASON_HEADER, "Support")
-                .exchange()
-                .expectStatus()
-                .isForbidden()
-                .expectBody()
-                .jsonPath("$.type")
-                .isEqualTo(ProblemType.PASSKEY_REQUIRED.uri().toString());
-        assertThat(auditCount(admin, "USER_VIEW", "SUCCESS", null)).isZero();
-        userView(base + "/members/me", stale, member)
-                .exchange()
-                .expectStatus()
-                .isForbidden()
-                .expectBody()
-                .jsonPath("$.type")
-                .isEqualTo(ProblemType.PASSKEY_REQUIRED.uri().toString());
-        userView(base + "/members/me", token(admin, Instant.now()), member)
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
-                .jsonPath("$.account.id")
-                .isEqualTo(String.valueOf(member.account().getId()));
-    }
-
-    private WebTestClient.RequestHeadersSpec<?> userView(String path, String token, WorkspaceActor viewed) {
-        return client.get()
-                .uri(path)
-                .header(HttpHeaders.COOKIE, cookie + "=" + token)
-                .header(
-                        UserViewContextHolder.WORKSPACE_HEADER,
-                        viewed.workspace().getWorkspaceSlug())
-                .header(
-                        UserViewContextHolder.ACCOUNT_HEADER,
-                        String.valueOf(viewed.account().getId()))
-                .header(UserViewContextHolder.REASON_HEADER, "Support");
     }
 
     private Account account() {

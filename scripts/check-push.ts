@@ -131,7 +131,7 @@ export function pushTasks(paths: string[] | undefined): string[] {
 }
 
 const nativeTest =
-	/^(?:scripts\/.*\.test\.ts|docker\/agents\/.*\.test\.ts|server\/application\/src\/test\/resources\/agent\/[^/]+\.spec\.ts)$/u;
+	/^(?:scripts\/.*\.test\.ts|figma-plugin\/src\/.*\.test\.ts|docker\/agents\/.*\.test\.ts|server\/application\/src\/test\/resources\/agent\/[^/]+\.spec\.ts)$/u;
 
 /**
  * The Node tests that run a Git hook. A test reaches a hook only through its path, Git's hook setting or the hook

@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -18,6 +20,8 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDraft;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.ProblemCandidate;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultCandidate;
+import de.tum.cit.aet.hephaestus.practices.spi.ResultEvidence;
+import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +29,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -191,7 +196,7 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
                 resultId);
         var page = new ComposedFeedback.Page(
                 "Guard the token boundary",
-                "Two changes forward unchecked tokens.",
+                "This change forwards unchecked tokens.",
                 "Check invalid tokens before forwarding a request.");
         var piece = new ComposedFeedback(
                 FeedbackDestination.PRACTICE_PAGE, List.of(resultId), null, List.of(), null, trace, page);
@@ -208,6 +213,54 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
                 .getFirst();
         assertThat(draft.body()).isNull();
         assertThat(draft.page()).isEqualTo(new FeedbackDraft.Page(page.title(), page.body(), page.nextStep()));
+    }
+
+    /**
+     * A practice page pattern may state how many items it spans: the server counts this run's item and the earlier
+     * occurrence in the support history, which the card does not cite (#5469).
+     */
+    @ParameterizedTest
+    @CsvSource({"Two changes forward unchecked tokens., true", "Three changes forward unchecked tokens., false"})
+    void shouldAcceptOnlyTheItemCountThatAPracticePagePatternSpans(String body, boolean accepted) {
+        var job = RuntimeReviewTestData.job();
+        UUID current = UUID.randomUUID(), prior = UUID.randomUUID();
+        // The accepted case reads no quote, and the refused one stops before the support checks.
+        var candidate = mock(ResultCandidate.class);
+        lenient().when(candidate.developerId()).thenReturn(5L);
+        when(candidate.itemId()).thenReturn(7L);
+        lenient().when(candidate.evidence()).thenReturn(new ResultEvidence(List.of(), null, null, List.of()));
+        var earlier = mock(ResultHistoryEntry.class);
+        lenient().when(earlier.resultId()).thenReturn(prior);
+        when(earlier.developerAccountId()).thenReturn(5L);
+        when(earlier.itemId()).thenReturn(6L);
+        var trace = new FeedbackCompositionTrace(
+                List.of(new FeedbackCompositionTrace.CopySupport(
+                        FeedbackCopyKind.SUMMARY, 0, List.of(new FeedbackCompositionTrace.Support(current, null)))),
+                List.of(),
+                null,
+                current);
+        var piece = new ComposedFeedback(
+                FeedbackDestination.PRACTICE_PAGE,
+                List.of(current),
+                null,
+                List.of(),
+                null,
+                trace,
+                new ComposedFeedback.Page(
+                        "Guard the token boundary", body, "Check invalid tokens before forwarding a request."));
+        ThrowingCallable build = () -> FeedbackDraftBuilder.build(
+                job,
+                new FeedbackPackage(List.of(current), List.of(piece), false, null),
+                List.of(new AdmittedResultSnapshot(current, candidate, List.of())),
+                List.of(earlier),
+                Map.of());
+
+        if (accepted) assertThatCode(build).doesNotThrowAnyException();
+        else
+            assertThatThrownBy(build)
+                    .isInstanceOfSatisfying(
+                            FeedbackTextRefusedException.class,
+                            refused -> assertThat(refused.rule()).isEqualTo("COUNT"));
     }
 
     @ParameterizedTest
@@ -265,6 +318,7 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
         UUID resultId = UUID.randomUUID(), problemId = UUID.randomUUID();
         var candidate = mock(ResultCandidate.class);
         when(candidate.developerId()).thenReturn(5L);
+        when(candidate.evidence()).thenReturn(new ResultEvidence(List.of(), null, null, List.of()));
         var admitted = List.of(new AdmittedResultSnapshot(
                 resultId, candidate, List.of(new AdmittedProblemSnapshot(problemId, mock(ProblemCandidate.class)))));
         var anchors = Map.of(
@@ -277,7 +331,7 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
             var page = destination == FeedbackDestination.PRACTICE_PAGE
                     ? new ComposedFeedback.Page(
                             field.equals("title") ? words : "Keep the failure cause",
-                            field.equals("body") ? words : "Two handlers drop the cause.",
+                            field.equals("body") ? words : "The handlers drop the cause.",
                             field.equals("nextStep") ? words : "Rethrow the failure with its cause.")
                     : null;
             var copy = switch (destination) {
@@ -319,6 +373,12 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
                 .isInstanceOfSatisfying(FeedbackTextRefusedException.class, refused -> {
                     assertThat(refused.destination()).isEqualTo(destination);
                     assertThat(refused.rule()).isEqualTo("MENTION");
+                    assertThat(refused.field()).isEqualTo(expectedField);
+                });
+        assertThatThrownBy(() -> FeedbackDraftBuilder.build(
+                        job, request.apply("13 of 17 handlers drop the cause."), admitted, List.of(), anchors))
+                .isInstanceOfSatisfying(FeedbackTextRefusedException.class, refused -> {
+                    assertThat(refused.rule()).isEqualTo("COUNT");
                     assertThat(refused.field()).isEqualTo(expectedField);
                 });
     }

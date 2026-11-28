@@ -111,7 +111,10 @@ Since JDK 24, a monitor no longer pins a virtual thread ([JEP 491](https://openj
 A virtual thread that blocks in a native frame or a class initializer still keeps its carrier.
 A few such threads can stall every virtual thread, the waiters of a connection pool among them.
 The JDK records each such park, and the failure prints its call path.
+The tier leaves out one wait that only the JDK causes: a thread that resolves a class waits while another thread loads that class.
+
 `PinnedParks.during` asserts in a unit test that a call pins no virtual thread.
+`PinnedParks.during` leaves out the JDK parks that `PinnedParks.ownedByJdk` names.
 
 Caffeine runs a `get(key, loader)` loader under the lock of a map bin.
 A loader that blocks stalls every write to that bin and every caller of the same key, but it does not pin.

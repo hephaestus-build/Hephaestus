@@ -3962,11 +3962,11 @@ export const FeedbackAccountRefSchema = {
 export const FeedbackAnswerSchema = {
 	type: "object",
 	description:
-		"A developer's answer to feedback: the resolution, and the explanation only for a disagreement",
+		"A developer's answer to feedback: the resolution, and the explanation only for a disagreement that the developer gave in the last 30 days",
 	properties: {
 		comment: {
 			type: ["string", "null"],
-			description: "Only for a disagreement",
+			description: "Only for a disagreement, and only for 30 days after the developer gave it",
 		},
 		createdAt: {
 			type: "string",
@@ -4323,9 +4323,12 @@ export const FeedbackDestinationSchema = {
 
 export const FeedbackDisagreementSchema = {
 	type: "object",
+	description:
+		"A developer's current disagreement with feedback, as a workspace admin reads it on a result.",
 	properties: {
 		comment: {
-			type: "string",
+			type: ["string", "null"],
+			description: "The developer's explanation, only for 30 days after they gave it (ADR 0125)",
 		},
 		destination: {
 			$ref: "#/components/schemas/FeedbackDestination",
@@ -5294,7 +5297,7 @@ export const IdentitySchema = {
 export const IdentityProviderTypeSchema = {
 	type: "string",
 	description: "Extensible enum: a client accepts a value that the examples do not name.",
-	examples: ["GITHUB", "GITLAB", "SLACK", "OUTLINE"],
+	examples: ["GITHUB", "GITLAB", "SLACK", "OUTLINE", "OIDC"],
 } as const;
 
 export const IdentityProviderViewSchema = {
@@ -6651,7 +6654,7 @@ export const LlmUsageByJobTypeSchema = {
 
 export const LoginProviderProviderTypeSchema = {
 	type: "string",
-	enum: ["GITHUB", "GITLAB", "SLACK", "OUTLINE"],
+	enum: ["GITHUB", "GITLAB", "SLACK", "OUTLINE", "OIDC"],
 } as const;
 
 export const LoginProviderViewSchema = {
@@ -7666,40 +7669,6 @@ export const OffsetPageDTOSyncJobSchema = {
 	required: ["content", "page", "size", "totalElements", "totalPages"],
 } as const;
 
-export const OffsetPageDTOUserViewAccountSchema = {
-	type: "object",
-	description: "One numbered page of a list",
-	properties: {
-		content: {
-			type: "array",
-			items: {
-				$ref: "#/components/schemas/UserViewAccount",
-			},
-		},
-		page: {
-			type: "integer",
-			format: "int32",
-			description: "This page's number, from 0",
-		},
-		size: {
-			type: "integer",
-			format: "int32",
-			description: "The most rows a page holds",
-		},
-		totalElements: {
-			type: "integer",
-			format: "int64",
-			description: "Rows in the whole list",
-		},
-		totalPages: {
-			type: "integer",
-			format: "int32",
-			description: "Pages in the whole list",
-		},
-	},
-	required: ["content", "page", "size", "totalElements", "totalPages"],
-} as const;
-
 export const OffsetPageDTOWorkspaceMembershipSchema = {
 	type: "object",
 	description: "One numbered page of a list",
@@ -8209,21 +8178,6 @@ export const PasskeyStatusSchema = {
 		"verified",
 		"workspaceAdminRequired",
 	],
-} as const;
-
-export const PerPersonResultsSchema = {
-	type: "object",
-	properties: {
-		canTurnOn: {
-			type: "boolean",
-			description: "Whether the caller may turn it on: only a workspace owner may",
-		},
-		enabled: {
-			type: "boolean",
-			description: "Whether workspace admins see practice results per person",
-		},
-	},
-	required: ["canTurnOn", "enabled"],
 } as const;
 
 export const PersonDataProviderSchema = {
@@ -9086,6 +9040,11 @@ export const PracticeItemTypeOptionSchema = {
 		"scanItemKinds",
 		"scanSupported",
 	],
+} as const;
+
+export const PracticeLevelSchema = {
+	type: "string",
+	enum: ["ITEM", "MEMBER"],
 } as const;
 
 export const PracticePageCleanWorkSchema = {
@@ -11916,6 +11875,28 @@ export const ReplaceOutlineTokenRequestSchema = {
 	required: ["token"],
 } as const;
 
+export const RepositoryCommitVersionSchema = {
+	allOf: [
+		{
+			type: "object",
+			properties: {
+				commit: {
+					type: "string",
+				},
+				kind: {
+					type: "string",
+					enum: ["REPOSITORY_COMMIT"],
+				},
+				ref: {
+					type: "string",
+				},
+			},
+		},
+	],
+	description: "A repository at the commit that the review pinned on its monitored default branch.",
+	required: ["commit", "kind", "ref"],
+} as const;
+
 export const RepositoryInfoSchema = {
 	type: "object",
 	description: "Information about a git repository",
@@ -12622,16 +12603,6 @@ export const ReviewSchema = {
 				},
 			],
 		},
-		requestedBy: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/AccountRef",
-				},
-				{
-					type: "null",
-				},
-			],
-		},
 		results: {
 			$ref: "#/components/schemas/ReviewResultCounts",
 		},
@@ -12675,12 +12646,32 @@ export const ReviewSchema = {
 		"origin",
 		"practices",
 		"progress",
-		"requestedBy",
 		"results",
 		"startedBy",
 		"status",
 		"stopReason",
 	],
+} as const;
+
+export const ReviewAudienceSchema = {
+	type: "object",
+	description:
+		"Who reads a review. A team review names its team project; no other audience names one.",
+	properties: {
+		kind: {
+			$ref: "#/components/schemas/ReviewAudienceKind",
+		},
+		teamProjectId: {
+			type: ["string", "null"],
+			format: "uuid",
+		},
+	},
+	required: ["kind", "teamProjectId"],
+} as const;
+
+export const ReviewAudienceKindSchema = {
+	type: "string",
+	enum: ["OPERATIONAL", "TEAM", "PERSONAL"],
 } as const;
 
 export const ReviewBatchSchema = {
@@ -12888,16 +12879,6 @@ export const ReviewBoundResultSchema = {
 		outcome: {
 			$ref: "#/components/schemas/ResultOutcome",
 		},
-		person: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/ReviewPerson",
-				},
-				{
-					type: "null",
-				},
-			],
-		},
 		practiceName: {
 			type: "string",
 		},
@@ -12946,7 +12927,6 @@ export const ReviewBoundResultSchema = {
 		"id",
 		"item",
 		"outcome",
-		"person",
 		"practiceName",
 		"practiceSlug",
 		"recordedAt",
@@ -12985,6 +12965,28 @@ export const ReviewCadenceSchema = {
 	enum: ["DAILY", "WEEKLY"],
 } as const;
 
+export const ReviewChangeSchema = {
+	type: "object",
+	description:
+		"How a review differs from its baseline, the newest earlier closed review of the same setup and item (ADR 0167\n decision 6). The three sides are independent: one commit with other pinned evidence is the same version with changed\n evidence. Only the evidence can be unknown; the constructor refuses an unknown version or setup.",
+	properties: {
+		baselineReviewId: {
+			type: "string",
+			format: "uuid",
+		},
+		evidence: {
+			$ref: "#/components/schemas/ReviewDifference",
+		},
+		setup: {
+			$ref: "#/components/schemas/ReviewDifference",
+		},
+		version: {
+			$ref: "#/components/schemas/ReviewDifference",
+		},
+	},
+	required: ["baselineReviewId", "evidence", "setup", "version"],
+} as const;
+
 export const ReviewContextSchema = {
 	type: "object",
 	properties: {
@@ -13011,6 +13013,21 @@ export const ReviewContextSchema = {
 	required: ["canInspectReviewDetails", "requestAllowed", "workspaceId", "workspaceSlug"],
 } as const;
 
+export const ReviewCoverageSchema = {
+	type: "object",
+	description:
+		"The planned pairs of the practices of one level, by what became of them. A review never sums two levels.",
+	properties: {
+		counts: {
+			$ref: "#/components/schemas/ReviewItemCounts",
+		},
+		level: {
+			$ref: "#/components/schemas/PracticeLevel",
+		},
+	},
+	required: ["counts", "level"],
+} as const;
+
 export const ReviewDecisionSchema = {
 	type: "string",
 	enum: ["APPROVED", "CHANGES_REQUESTED", "REVIEW_REQUIRED"],
@@ -13023,17 +13040,42 @@ export const ReviewDetailSchema = {
 			type: "integer",
 			format: "int32",
 		},
+		audience: {
+			$ref: "#/components/schemas/ReviewAudience",
+		},
 		batchId: {
 			type: ["string", "null"],
 			format: "uuid",
+		},
+		change: {
+			anyOf: [
+				{
+					$ref: "#/components/schemas/ReviewChange",
+				},
+				{
+					type: "null",
+				},
+			],
 		},
 		completedAt: {
 			type: ["string", "null"],
 			format: "date-time",
 		},
+		coverage: {
+			type: "array",
+			items: {
+				$ref: "#/components/schemas/ReviewCoverage",
+			},
+		},
 		createdAt: {
 			type: "string",
 			format: "date-time",
+		},
+		evidence: {
+			type: "array",
+			items: {
+				$ref: "#/components/schemas/ReviewEvidence",
+			},
 		},
 		feedback: {
 			$ref: "#/components/schemas/ReviewFeedbackCounts",
@@ -13091,23 +13133,33 @@ export const ReviewDetailSchema = {
 				},
 			],
 		},
-		requestedBy: {
+		results: {
+			$ref: "#/components/schemas/ReviewResultCounts",
+		},
+		reviewedVersion: {
 			anyOf: [
 				{
-					$ref: "#/components/schemas/AccountRef",
+					$ref: "#/components/schemas/ReviewedVersion",
 				},
 				{
 					type: "null",
 				},
 			],
 		},
-		results: {
-			$ref: "#/components/schemas/ReviewResultCounts",
-		},
 		runtime: {
 			anyOf: [
 				{
 					$ref: "#/components/schemas/ReviewRuntime",
+				},
+				{
+					type: "null",
+				},
+			],
+		},
+		setup: {
+			anyOf: [
+				{
+					$ref: "#/components/schemas/ReviewSetupRef",
 				},
 				{
 					type: "null",
@@ -13140,12 +13192,19 @@ export const ReviewDetailSchema = {
 		usage: {
 			$ref: "#/components/schemas/ReviewUsage",
 		},
+		versionKind: {
+			$ref: "#/components/schemas/ReviewVersionKind",
+		},
 	},
 	required: [
 		"activeJobCount",
+		"audience",
 		"batchId",
+		"change",
 		"completedAt",
+		"coverage",
 		"createdAt",
+		"evidence",
 		"feedback",
 		"generatedPaths",
 		"id",
@@ -13158,14 +13217,49 @@ export const ReviewDetailSchema = {
 		"origin",
 		"practices",
 		"progress",
-		"requestedBy",
 		"results",
+		"reviewedVersion",
 		"runtime",
+		"setup",
 		"startedBy",
 		"status",
 		"stopReason",
 		"usage",
+		"versionKind",
 	],
+} as const;
+
+export const ReviewDifferenceSchema = {
+	type: "string",
+	description:
+		"Whether one side of a review differs from its baseline. Only the evidence can be unknown.",
+	enum: ["SAME", "CHANGED", "UNKNOWN"],
+} as const;
+
+export const ReviewEvidenceSchema = {
+	type: "object",
+	description:
+		"One source of evidence from outside the reviewed version, pinned when the review was created, such as the CI runs of\n a commit. Its slot names the source, for example <code>ci.observed</code>.",
+	properties: {
+		readAt: {
+			type: ["string", "null"],
+			format: "date-time",
+		},
+		slot: {
+			type: "string",
+		},
+		state: {
+			$ref: "#/components/schemas/ReviewEvidenceState",
+		},
+	},
+	required: ["readAt", "slot", "state"],
+} as const;
+
+export const ReviewEvidenceStateSchema = {
+	type: "string",
+	description:
+		"What the server read for one evidence source when it created the review. A missing or incomplete source leaves its criteria Could not determine.",
+	enum: ["PRESENT", "INCOMPLETE", "MISSING"],
 } as const;
 
 export const ReviewFeedbackSchema = {
@@ -13217,14 +13311,14 @@ export const ReviewFeedbackSchema = {
 				{
 					$ref: "#/components/schemas/ReviewPerson",
 					description:
-						"Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off",
+						"The developer of feedback on the work, which names them as the work does. Null for feedback on a practice page or in a conversation (ADR 0125)",
 				},
 				{
 					type: "null",
 				},
 			],
 			description:
-				"Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off",
+				"The developer of feedback on the work, which names them as the work does. Null for feedback on a practice page or in a conversation (ADR 0125)",
 		},
 		replacesId: {
 			type: ["string", "null"],
@@ -13424,14 +13518,14 @@ export const ReviewFeedbackDetailSchema = {
 				{
 					$ref: "#/components/schemas/ReviewPerson",
 					description:
-						"Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off",
+						"The developer of feedback on the work, which names them as the work does. Null for feedback on a practice page or in a conversation (ADR 0125)",
 				},
 				{
 					type: "null",
 				},
 			],
 			description:
-				"Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off",
+				"The developer of feedback on the work, which names them as the work does. Null for feedback on a practice page or in a conversation (ADR 0125)",
 		},
 		replacesId: {
 			type: ["string", "null"],
@@ -13512,6 +13606,8 @@ export const ReviewFeedbackSortSchema = {
 
 export const ReviewItemCountsSchema = {
 	type: "object",
+	description:
+		"The planned pairs of one practice, or of one practice level, by what became of them. Each planned pair is reviewed,\n withheld or not reviewed. A reused pair is reviewed too, so <code>reused</code> is a part of <code>reviewed</code>.",
 	properties: {
 		listed: {
 			type: "integer",
@@ -13877,6 +13973,9 @@ export const ReviewPracticeSchema = {
 		itemCounts: {
 			$ref: "#/components/schemas/ReviewItemCounts",
 		},
+		level: {
+			$ref: "#/components/schemas/PracticeLevel",
+		},
 		number: {
 			type: ["null", "integer"],
 			format: "int32",
@@ -13914,6 +14013,7 @@ export const ReviewPracticeSchema = {
 	required: [
 		"editedIn",
 		"itemCounts",
+		"level",
 		"number",
 		"practiceName",
 		"practiceSlug",
@@ -14021,16 +14121,6 @@ export const ReviewProblemSchema = {
 		path: {
 			type: ["string", "null"],
 		},
-		person: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/ReviewPerson",
-				},
-				{
-					type: "null",
-				},
-			],
-		},
 		practiceName: {
 			type: "string",
 		},
@@ -14099,7 +14189,6 @@ export const ReviewProblemSchema = {
 		"item",
 		"markedIncorrectAt",
 		"path",
-		"person",
 		"practiceName",
 		"practiceSlug",
 		"recordedAt",
@@ -14164,16 +14253,6 @@ export const ReviewProblemDetailSchema = {
 		},
 		path: {
 			type: ["string", "null"],
-		},
-		person: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/ReviewPerson",
-				},
-				{
-					type: "null",
-				},
-			],
 		},
 		practiceName: {
 			type: "string",
@@ -14249,7 +14328,6 @@ export const ReviewProblemDetailSchema = {
 		"item",
 		"markedIncorrectAt",
 		"path",
-		"person",
 		"practiceName",
 		"practiceSlug",
 		"problem",
@@ -14268,8 +14346,7 @@ export const ReviewProblemDetailSchema = {
 
 export const ReviewProgressSchema = {
 	type: "object",
-	description:
-		"How far an active item review got; absent for a scan, which lists its items in pages",
+	description: "How far an item review got; absent for a scan, which lists its items in pages",
 	properties: {
 		continuing: {
 			type: "boolean",
@@ -14288,8 +14365,11 @@ export const ReviewProgressSchema = {
 			description:
 				"Practices that the review's attempts work on. A practice decided before the first attempt, such as one withheld for readiness, is not counted.",
 		},
+		stage: {
+			$ref: "#/components/schemas/ReviewStage",
+		},
 	},
-	required: ["continuing", "practicesEnded", "practicesTotal"],
+	required: ["continuing", "practicesEnded", "practicesTotal", "stage"],
 } as const;
 
 export const ReviewQueueSchema = {
@@ -14360,16 +14440,6 @@ export const ReviewQueueItemSchema = {
 			type: "string",
 			format: "uuid",
 		},
-		person: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/ReviewPerson",
-				},
-				{
-					type: "null",
-				},
-			],
-		},
 		progress: {
 			anyOf: [
 				{
@@ -14392,7 +14462,7 @@ export const ReviewQueueItemSchema = {
 			$ref: "#/components/schemas/ReviewJobStatus",
 		},
 	},
-	required: ["heldForBudget", "item", "jobId", "person", "progress", "reviewId", "since", "status"],
+	required: ["heldForBudget", "item", "jobId", "progress", "reviewId", "since", "status"],
 } as const;
 
 export const ReviewQueueStateSchema = {
@@ -14546,16 +14616,6 @@ export const ReviewResultSchema = {
 		outcome: {
 			$ref: "#/components/schemas/ResultOutcome",
 		},
-		person: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/ReviewPerson",
-				},
-				{
-					type: "null",
-				},
-			],
-		},
 		practiceName: {
 			type: "string",
 		},
@@ -14618,7 +14678,6 @@ export const ReviewResultSchema = {
 		"markedIncorrectAt",
 		"origin",
 		"outcome",
-		"person",
 		"practiceName",
 		"practiceSlug",
 		"problemCount",
@@ -14766,16 +14825,6 @@ export const ReviewResultDetailSchema = {
 		outcome: {
 			$ref: "#/components/schemas/ResultOutcome",
 		},
-		person: {
-			anyOf: [
-				{
-					$ref: "#/components/schemas/ReviewPerson",
-				},
-				{
-					type: "null",
-				},
-			],
-		},
 		practiceName: {
 			type: "string",
 		},
@@ -14853,7 +14902,6 @@ export const ReviewResultDetailSchema = {
 		"marks",
 		"origin",
 		"outcome",
-		"person",
 		"practiceName",
 		"practiceSlug",
 		"practiceVersionId",
@@ -14925,6 +14973,10 @@ export const ReviewScheduleSchema = {
 			type: "string",
 			format: "date-time",
 		},
+		setupId: {
+			type: ["string", "null"],
+			format: "uuid",
+		},
 		updatedAt: {
 			type: "string",
 			format: "date-time",
@@ -14944,6 +14996,7 @@ export const ReviewScheduleSchema = {
 		"lastRunAt",
 		"lookbackDays",
 		"nextRunAt",
+		"setupId",
 		"updatedAt",
 		"version",
 	],
@@ -14992,6 +15045,39 @@ export const ReviewScopeRepositorySchema = {
 		},
 	},
 	required: ["baseBranches", "repositoryItemId"],
+} as const;
+
+export const ReviewSetupRefSchema = {
+	type: "object",
+	description:
+		"The review setup that started a review, as the review keeps a copy of it (ADR 0165 decision 10).",
+	properties: {
+		id: {
+			type: "string",
+			format: "uuid",
+		},
+		name: {
+			type: "string",
+		},
+	},
+	required: ["id", "name"],
+} as const;
+
+export const ReviewStageSchema = {
+	type: "string",
+	description:
+		"The one state a status display shows for an item review. It follows from stored states only: it estimates no share of the work and no remaining time, and it carries no observation.",
+	enum: [
+		"QUEUED",
+		"CONTINUING",
+		"CHECKING",
+		"OBSERVATIONS_READY",
+		"READY",
+		"PARTLY_CHECKED",
+		"WITHHELD",
+		"FAILED",
+		"STOPPED",
+	],
 } as const;
 
 export const ReviewStatusSchema = {
@@ -15078,13 +15164,32 @@ export const ReviewSummarySchema = {
 			type: "integer",
 			format: "int32",
 		},
+		audience: {
+			$ref: "#/components/schemas/ReviewAudience",
+		},
 		batchId: {
 			type: ["string", "null"],
 			format: "uuid",
 		},
+		change: {
+			anyOf: [
+				{
+					$ref: "#/components/schemas/ReviewChange",
+				},
+				{
+					type: "null",
+				},
+			],
+		},
 		completedAt: {
 			type: ["string", "null"],
 			format: "date-time",
+		},
+		coverage: {
+			type: "array",
+			items: {
+				$ref: "#/components/schemas/ReviewCoverage",
+			},
 		},
 		createdAt: {
 			type: "string",
@@ -15136,18 +15241,28 @@ export const ReviewSummarySchema = {
 				},
 			],
 		},
-		requestedBy: {
+		results: {
+			$ref: "#/components/schemas/ReviewResultCounts",
+		},
+		reviewedVersion: {
 			anyOf: [
 				{
-					$ref: "#/components/schemas/AccountRef",
+					$ref: "#/components/schemas/ReviewedVersion",
 				},
 				{
 					type: "null",
 				},
 			],
 		},
-		results: {
-			$ref: "#/components/schemas/ReviewResultCounts",
+		setup: {
+			anyOf: [
+				{
+					$ref: "#/components/schemas/ReviewSetupRef",
+				},
+				{
+					type: "null",
+				},
+			],
 		},
 		startedBy: {
 			anyOf: [
@@ -15172,11 +15287,17 @@ export const ReviewSummarySchema = {
 				},
 			],
 		},
+		versionKind: {
+			$ref: "#/components/schemas/ReviewVersionKind",
+		},
 	},
 	required: [
 		"activeJobCount",
+		"audience",
 		"batchId",
+		"change",
 		"completedAt",
+		"coverage",
 		"createdAt",
 		"feedback",
 		"id",
@@ -15189,11 +15310,13 @@ export const ReviewSummarySchema = {
 		"origin",
 		"practices",
 		"progress",
-		"requestedBy",
 		"results",
+		"reviewedVersion",
+		"setup",
 		"startedBy",
 		"status",
 		"stopReason",
+		"versionKind",
 	],
 } as const;
 
@@ -15445,6 +15568,11 @@ export const ReviewUsageAttemptSchema = {
 	],
 } as const;
 
+export const ReviewVersionKindSchema = {
+	type: "string",
+	enum: ["REPOSITORY_COMMIT", "SUBMITTED_VERSION", "ITEM_REVISION"],
+} as const;
+
 export const ReviewedBySchema = {
 	type: "object",
 	properties: {
@@ -15532,6 +15660,30 @@ export const ReviewedPracticeSchema = {
 		},
 	},
 	required: ["group", "name", "slug", "whatGoodLooksLike", "whyItMatters"],
+} as const;
+
+export const ReviewedVersionSchema = {
+	discriminator: {
+		mapping: {
+			REPOSITORY_COMMIT: "#/components/schemas/RepositoryCommitVersion",
+			SUBMITTED_VERSION: "#/components/schemas/SubmittedVersion",
+		},
+		propertyName: "kind",
+	},
+	oneOf: [
+		{
+			$ref: "#/components/schemas/RepositoryCommitVersion",
+		},
+		{
+			$ref: "#/components/schemas/SubmittedVersion",
+		},
+	],
+	properties: {
+		kind: {
+			type: "string",
+		},
+	},
+	required: ["kind"],
 } as const;
 
 export const ReviewerSchema = {
@@ -16732,6 +16884,318 @@ export const StateDimensionSchema = {
 	required: ["label", "name", "values"],
 } as const;
 
+export const SubmittedVersionSchema = {
+	allOf: [
+		{
+			type: "object",
+			properties: {
+				kind: {
+					type: "string",
+					enum: ["SUBMITTED_VERSION"],
+				},
+				number: {
+					type: "integer",
+					format: "int32",
+				},
+				versionId: {
+					type: "string",
+					format: "uuid",
+				},
+			},
+		},
+	],
+	description:
+		"The immutable version of a team item that the review pinned (ADR 0165), with its number in that item.",
+	required: ["kind", "number", "versionId"],
+} as const;
+
+export const SupportShareSchema = {
+	type: "object",
+	description:
+		"A share as the person who made it sees it: to whom, until when, and how often it was read.",
+	properties: {
+		createdAt: {
+			type: "string",
+			format: "date-time",
+		},
+		expiresAt: {
+			type: "string",
+			format: "date-time",
+		},
+		id: {
+			type: "string",
+			format: "uuid",
+		},
+		includesText: {
+			type: "boolean",
+		},
+		lastReadAt: {
+			type: "string",
+			format: "date-time",
+		},
+		readCount: {
+			type: "integer",
+			format: "int32",
+		},
+		recipient: {
+			$ref: "#/components/schemas/SupportShareRecipient",
+		},
+		revokedAt: {
+			type: "string",
+			format: "date-time",
+		},
+		state: {
+			$ref: "#/components/schemas/SupportShareState",
+		},
+		turnId: {
+			type: "string",
+			format: "uuid",
+		},
+		workspaceSlug: {
+			type: "string",
+			description: "The slug of the workspace of the shared turn",
+		},
+	},
+	required: [
+		"createdAt",
+		"expiresAt",
+		"id",
+		"includesText",
+		"readCount",
+		"recipient",
+		"state",
+		"turnId",
+		"workspaceSlug",
+	],
+} as const;
+
+export const SupportShareMessageSchema = {
+	type: "object",
+	description: "One message of a shared turn, exactly as the person saw it when they shared it.",
+	properties: {
+		author: {
+			$ref: "#/components/schemas/SupportShareMessageAuthor",
+			description: "QUESTION: the person wrote it. ANSWER: Hephaestus wrote it.",
+		},
+		createdAt: {
+			type: "string",
+			format: "date-time",
+		},
+		entryId: {
+			type: "string",
+			format: "uuid",
+		},
+		text: {
+			type: "string",
+		},
+	},
+	required: ["author", "createdAt", "entryId", "text"],
+} as const;
+
+export const SupportShareMessageAuthorSchema = {
+	type: "string",
+	enum: ["QUESTION", "ANSWER"],
+} as const;
+
+export const SupportSharePreviewSchema = {
+	type: "object",
+	description: "Exactly what the recipient will read, before the person shares it.",
+	properties: {
+		messages: {
+			type: "array",
+			description:
+				"The messages that the share shows. Empty when the person shares only diagnostics.",
+			items: {
+				$ref: "#/components/schemas/SupportShareMessage",
+			},
+		},
+		recipients: {
+			type: "array",
+			description: "The instance admins who can receive the share",
+			items: {
+				$ref: "#/components/schemas/SupportShareRecipient",
+			},
+		},
+		textDigest: {
+			type: "string",
+			description: "Confirms these exact messages when the person shares. Absent without messages.",
+		},
+		turn: {
+			$ref: "#/components/schemas/SupportShareTurn",
+		},
+		validForDays: {
+			type: "integer",
+			format: "int32",
+			description: "How many days the recipient can read the share",
+		},
+	},
+	required: ["messages", "recipients", "turn", "validForDays"],
+} as const;
+
+export const SupportSharePreviewRequestSchema = {
+	type: "object",
+	properties: {
+		includeText: {
+			type: "boolean",
+			description: "Whether the share shows the turn's messages, or only its diagnostics",
+		},
+	},
+	required: ["includeText"],
+} as const;
+
+export const SupportShareReceivedSchema = {
+	type: "object",
+	description:
+		"A share as its recipient reads it. The person chose to show their name and this turn; the share shows nothing\n else about them.",
+	properties: {
+		createdAt: {
+			type: "string",
+			format: "date-time",
+		},
+		expiresAt: {
+			type: "string",
+			format: "date-time",
+		},
+		id: {
+			type: "string",
+			format: "uuid",
+		},
+		includesText: {
+			type: "boolean",
+		},
+		messages: {
+			type: "array",
+			description:
+				"The shared messages. Empty in the list, without text, or when the text is withheld.",
+			items: {
+				$ref: "#/components/schemas/SupportShareMessage",
+			},
+		},
+		sharedBy: {
+			type: "string",
+			description: "The person who shared the turn",
+		},
+		textWithheld: {
+			type: "boolean",
+			description:
+				"True when the person shared text that was deleted or changed since. The share then shows no text.",
+		},
+		turn: {
+			$ref: "#/components/schemas/SupportShareTurn",
+			description:
+				"The turn's diagnostics. Absent in the list, and when the turn no longer exists.",
+		},
+		workspaceSlug: {
+			type: "string",
+		},
+	},
+	required: [
+		"createdAt",
+		"expiresAt",
+		"id",
+		"includesText",
+		"messages",
+		"sharedBy",
+		"textWithheld",
+		"workspaceSlug",
+	],
+} as const;
+
+export const SupportShareRecipientSchema = {
+	type: "object",
+	description: "An instance admin who can receive a support share.",
+	properties: {
+		accountId: {
+			type: "string",
+		},
+		displayName: {
+			type: "string",
+		},
+	},
+	required: ["accountId", "displayName"],
+} as const;
+
+export const SupportShareRequestSchema = {
+	type: "object",
+	properties: {
+		includeText: {
+			type: "boolean",
+		},
+		recipientAccountId: {
+			type: "string",
+			description: "The instance admin who can read the share",
+			pattern: "[1-9][0-9]{0,18}",
+		},
+		textDigest: {
+			type: "string",
+			description: "The preview's text digest; required when the share includes text",
+			maxLength: 64,
+			minLength: 64,
+		},
+	},
+	required: ["includeText", "recipientAccountId"],
+} as const;
+
+export const SupportShareStateSchema = {
+	type: "string",
+	enum: ["ACTIVE", "EXPIRED", "REVOKED"],
+} as const;
+
+export const SupportShareTurnSchema = {
+	type: "object",
+	description: "The diagnostics of one conversation turn. It holds no text.",
+	properties: {
+		attempt: {
+			type: "integer",
+			format: "int32",
+		},
+		failedCall: {
+			type: "string",
+			description: "The kind of the last model call that failed, as the LLM proxy names it",
+		},
+		failedCallStatus: {
+			type: "integer",
+			format: "int32",
+			description: "The status that the provider answered the failed call with",
+		},
+		failureReason: {
+			$ref: "#/components/schemas/ConversationTurnFailureReason",
+			description: "Why the turn failed, as a closed kind. Absent unless the turn failed.",
+		},
+		finishedAt: {
+			type: "string",
+			format: "date-time",
+		},
+		queuedAt: {
+			type: "string",
+			format: "date-time",
+		},
+		runId: {
+			type: "string",
+			format: "uuid",
+			description: "The run that executed the turn: the key of its server logs",
+		},
+		startedAt: {
+			type: "string",
+			format: "date-time",
+		},
+		status: {
+			$ref: "#/components/schemas/ConversationTurnStatus",
+		},
+		surface: {
+			$ref: "#/components/schemas/ConversationTurnSurface",
+		},
+		turnId: {
+			type: "string",
+			format: "uuid",
+		},
+		workspaceSlug: {
+			type: "string",
+		},
+	},
+	required: ["attempt", "queuedAt", "runId", "status", "surface", "turnId", "workspaceSlug"],
+} as const;
+
 export const SyncJobSchema = {
 	type: "object",
 	description: "One sync_job row — a single INITIAL/RECONCILIATION/BACKFILL pass for a connection",
@@ -17675,16 +18139,6 @@ export const UpdateOutlineCollectionStateRequestSchema = {
 	required: ["state"],
 } as const;
 
-export const UpdatePerPersonResultsSchema = {
-	type: "object",
-	properties: {
-		enabled: {
-			type: "boolean",
-		},
-	},
-	required: ["enabled"],
-} as const;
-
 export const UpdatePracticeGroupRequestSchema = {
 	type: "object",
 	properties: {
@@ -18236,23 +18690,6 @@ export const UserTeamsSchema = {
 		},
 	},
 	required: ["id", "login", "name", "teams", "url"],
-} as const;
-
-export const UserViewAccountSchema = {
-	type: "object",
-	properties: {
-		account: {
-			$ref: "#/components/schemas/AccountRef",
-		},
-		accountId: {
-			type: "string",
-			pattern: "^[1-9][0-9]*$",
-		},
-		providerLogin: {
-			type: ["string", "null"],
-		},
-	},
-	required: ["account", "accountId", "providerLogin"],
 } as const;
 
 export const ValueSchema = {
@@ -18900,11 +19337,6 @@ export const WorkspaceListItemSchema = {
 				type: "string",
 			},
 			uniqueItems: true,
-		},
-		perPersonResultsForAdmins: {
-			type: "boolean",
-			description:
-				"Whether workspace admins see practice results per person. Every member reads it, because it decides who sees their results.",
 		},
 		practicesEnabled: {
 			type: "boolean",

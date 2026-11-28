@@ -24,14 +24,12 @@ import {
 	outlineDocument,
 	practiceNameOf,
 	pullRequestReviewItem,
-	reviewAccounts,
 	resultDetail,
 	resultCounts,
 	reviewProblemDetail,
 	reviewDetail,
 	reviewRefOf,
 	reviewDetailScanManyJobs,
-	reviewDevelopers,
 	reviewItem,
 	scannedFiles,
 	scannedRepository,
@@ -207,6 +205,7 @@ const withheldPractice: ReviewPractice = {
 	itemCounts: { listed: 1, reviewed: 0, reused: 0, withheld: 1, notReviewed: 0 },
 	results: { met: 0, notMet: 0, doesNotApply: 0, couldNotDetermine: 0 },
 	script: null,
+	level: "ITEM",
 };
 
 const reviewCases: LineageStateCase[] = [
@@ -272,7 +271,6 @@ const reviewCases: LineageStateCase[] = [
 				stateResult(id(3, index + 1), {
 					reviewId: reviewDetailScanManyJobs.id,
 					item: file,
-					person: null,
 					outcome: index === 0 ? "NOT_MET" : "MET",
 					severity: index === 0 ? "MAJOR" : null,
 					summary: index === 0 ? "The give-up line names no event" : null,
@@ -291,7 +289,7 @@ const originCases: LineageStateCase[] = [
 		"origin-request",
 		"Requested by an admin",
 		chain({ review: { origin: "REQUEST" } }),
-		(lineage) => detailOf(lineage, { startedBy: null, requestedBy: reviewAccounts.grace }),
+		(lineage) => detailOf(lineage, { startedBy: null }),
 	),
 	withCase(
 		"origin-schedule",
@@ -333,7 +331,6 @@ const itemCases: LineageStateCase[] = [
 					practiceSlug: "review-comments-explain",
 					outcome: "MET",
 					severity: null,
-					person: reviewDevelopers.grace,
 					summary: "Each comment says what to change and why",
 				}),
 			],
@@ -641,7 +638,6 @@ export const richReviewFixture = (() => {
 				resultId: result.id,
 				reviewId: result.reviewId,
 				item: result.item,
-				person: result.person,
 				practiceSlug: result.practiceSlug,
 				practiceName: result.practiceName,
 				group: null,
@@ -680,6 +676,7 @@ export const richReviewFixture = (() => {
 			script: null,
 			itemCounts: { listed: 1, reviewed: 1, reused: 0, withheld: 0, notReviewed: 0 },
 			results: resultCounts([result.outcome]),
+			level: "ITEM",
 		})),
 	});
 	if (review.runtime === null || review.runtime.jobs.length !== 1) {

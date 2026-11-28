@@ -41,6 +41,7 @@ function scripted(run: PracticeScriptRun): ReviewPractice {
 		},
 		results: { met: returned ? 1 : 0, notMet: 0, doesNotApply: 0, couldNotDetermine: 0 },
 		script: run,
+		level: "ITEM",
 	};
 }
 

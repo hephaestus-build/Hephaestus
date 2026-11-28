@@ -6,7 +6,6 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewTimingFactsQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewUsageAttempt;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -22,11 +21,8 @@ import org.junit.jupiter.api.Test;
 class ReviewUsageBulkReadTest extends BaseUnitTest {
     private static final long WORKSPACE = 7;
     private final ReviewRuntimeRepository runtime = mock(ReviewRuntimeRepository.class);
-    private final ReviewRuntimeQueryAdapter adapter = new ReviewRuntimeQueryAdapter(
-            mock(ReviewJobRepository.class),
-            mock(ReviewAssignmentQuery.class),
-            runtime,
-            mock(ReviewTimingFactsQuery.class));
+    private final ReviewRuntimeQueryAdapter adapter =
+            new ReviewRuntimeQueryAdapter(mock(ReviewJobRepository.class), runtime, mock(ReviewTimingFactsQuery.class));
 
     @Test
     void shouldKeepEveryAttemptAndUnknownPricingWithoutCountingReasoningTwice() {

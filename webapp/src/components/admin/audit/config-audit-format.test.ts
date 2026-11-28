@@ -152,6 +152,19 @@ describe("formatLeaf", () => {
 });
 
 describe("changeSummary", () => {
+	it("names the removal of per-person results for admins", () => {
+		expect(
+			changeSummary(
+				entry({
+					entityType: "WORKSPACE_VISIBILITY",
+					action: "DELETED",
+					changedKeys: ["perPersonResultsForAdmins"],
+					oldValue: '{"perPersonResultsForAdmins":true}',
+				}),
+			),
+		).toBe("Names in admin practice results removed");
+	});
+
 	it("leaves the summary empty for created/deleted, where the Action badge already says it", () => {
 		expect(changeSummary(entry({ action: "CREATED", newValue: "{}" }))).toBe("");
 		expect(changeSummary(entry({ action: "DELETED", oldValue: "{}" }))).toBe("");

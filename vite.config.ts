@@ -62,7 +62,7 @@ const group = (dependsOn: readonly string[]) => ({
 const webappSources = "'webapp/**/*.{js,jsx,ts,tsx,json,jsonc,css}'";
 const extensionSources = "'extension/**/*.{js,jsx,ts,tsx,json,jsonc,css}'";
 const agentSources =
-	"'server/application/src/{main,test}/resources/agent/**/*.ts' 'server/application/src/main/resources/practices/scripts/**/*.ts' 'docker/agents/{practice-scripts,pi}/**/*.ts' 'scripts/**/*.ts'";
+	"'server/application/src/{main,test}/resources/agent/**/*.ts' 'server/application/src/main/resources/practices/scripts/**/*.ts' 'docker/agents/{practice-scripts,pi}/**/*.ts' 'scripts/**/*.ts' 'figma-plugin/**/*.{ts,json}'";
 const loadSources = "'load-tests/**/*.js'";
 const docsSources = "'docs/**/*.{js,jsx,ts,tsx,json,jsonc,css}'";
 // Two passes: a negation applies to the whole invocation, so `!*/**` would also drop the nested set.
@@ -78,7 +78,7 @@ const configFormatCommand = (mode: "--check" | "--write") =>
 // Every tree the root config governs: `webapp/` and `docs/` carry their own configs and gates, and
 // `security/semgrep/` holds fixtures that are wrong on purpose.
 const oxlintTargets =
-	"server docker scripts load-tests .changeset .github commitlint.config.ts vite.config.ts";
+	"server docker scripts figma-plugin load-tests .changeset .github commitlint.config.ts vite.config.ts";
 // Decided when the config loads; a command never uses shell expansion.
 const oxlintFormat = process.env.GITHUB_ACTIONS === "true" ? "-f github " : "";
 
@@ -377,6 +377,7 @@ export default defineConfig({
 			]),
 			// The zip the Chrome Web Store takes, from the production build.
 			"build:extension": run("vp run --filter extension zip"),
+			"build:figma-plugin": run("vp run --filter figma-plugin build"),
 			"dev:extension": run("vp run --filter extension dev"),
 
 			"gate:agents-format": cached(`vp fmt --check ${agentSources}`),
@@ -384,6 +385,7 @@ export default defineConfig({
 			"gate:agents-lint": run(`vp exec oxlint ${oxlintFormat}${oxlintTargets}`),
 			"gate:agents-typecheck": cached("tsc -p tsconfig.node.json --noEmit"),
 			"gate:scripts-typecheck": cached("tsc -p scripts/tsconfig.json --noEmit"),
+			"gate:figma-plugin-typecheck": cached("tsc -p figma-plugin/tsconfig.json --noEmit"),
 			"gate:owned-code": run("node scripts/owned-source-sbom.ts"),
 			"gate:release-image-inventory": run("node scripts/check-release-image-inventory.ts"),
 			"gate:tooling-tests": group(["test:tooling"]),
@@ -402,7 +404,7 @@ export default defineConfig({
 				"node --test scripts/kubernetes-chart.test.ts scripts/kubernetes-chart-render*.test.ts",
 			),
 			"test:tooling": run(
-				`node --import ./scripts/fixtures/tooling-docker-tripwire.ts --test ${nodeTestFiles} scripts/*.test.ts scripts/api-generator/*.test.ts docs/src/lib/*.test.ts server/application/src/test/resources/integration/scm/sarif/*.test.ts`,
+				`node --import ./scripts/fixtures/tooling-docker-tripwire.ts --test ${nodeTestFiles} scripts/*.test.ts scripts/api-generator/*.test.ts docs/src/lib/*.test.ts server/application/src/test/resources/integration/scm/sarif/*.test.ts figma-plugin/src/*.test.ts`,
 			),
 
 			// The Prometheus alert rules that operators load: promtool's checks and unit tests, in Docker.

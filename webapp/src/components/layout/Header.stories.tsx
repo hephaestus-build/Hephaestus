@@ -180,21 +180,6 @@ export const GetStartedInMenu: Story = {
 	},
 };
 
-/** During a user view the menu holds only what acts on the signed-in administrator. */
-export const ReadOnly: Story = {
-	args: {
-		session: "signed-in",
-		readOnly: true,
-	},
-	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /^Account/u }));
-		const menu = within(await screen.findByRole("menu"));
-		await expectSettledVisible(menu.getByRole("menuitem", { name: "Sign out" }));
-		await expect(menu.queryByRole("menuitem", { name: "User settings" })).not.toBeInTheDocument();
-		await expect(menu.queryByRole("menuitem", { name: "Your reports" })).not.toBeInTheDocument();
-	},
-};
-
 export const Mobile: Story = {
 	args: {
 		session: "signed-in",

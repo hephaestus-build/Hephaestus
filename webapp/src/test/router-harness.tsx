@@ -105,9 +105,10 @@ export function testQueryClient(queries: DefaultOptions["queries"] = {}): QueryC
  */
 export async function loadRouteCode(...paths: string[]): Promise<void> {
 	// These React.lazy modules load outside the router's split route chunks: the root layout mounts
-	// the conversation panel, any page that shows Markdown mounts the renderers, and Practice setup
-	// mounts the practice repository card.
+	// the conversation panel, any page that shows Markdown mounts the renderers, Practice setup
+	// mounts the practice repository card, and a conversation mounts the support share dialog.
 	await import("@/routes/-GlobalConversationPanel");
+	await import("@/components/support-share/SupportShareDialog");
 	await loadMarkdownRenderer();
 	await loadFeedbackMarkdown();
 	await loadPracticeRepositorySetting();

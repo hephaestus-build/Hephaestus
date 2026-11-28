@@ -59,6 +59,8 @@ class ProxyRequestPolicy {
                         .filter(job -> reviews.allows(job, model))
                         .isPresent();
             case PRODUCT_FEEDBACK_DRAFT, PROBE -> false;
+            // A personal call has no workspace and no admission path yet, so it is refused here.
+            case PERSONAL_CONVERSATION -> false;
             case CONVERSATION_TURN ->
                 turns.findAccountId(workspaceId, attempt.sourceId())
                         .filter(account -> !digests.refuses(workspaceId, attempt.sourceId())

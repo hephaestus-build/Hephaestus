@@ -434,6 +434,8 @@ jobs:
               - '.vale/**'
               - '.vale.ini'
               - 'scripts/**'
+              # The Figma plugin's gates and tests run with the tooling.
+              - 'figma-plugin/**'
               - 'security/semgrep/**'
               - 'security/dependency-baseline.json'
               - 'security/retired-dependencies.json'

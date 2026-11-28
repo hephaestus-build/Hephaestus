@@ -45,6 +45,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.sql.Connection;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -55,6 +56,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -82,6 +84,39 @@ class ScmCaptureConsentTest extends BaseUnitTest {
                 .isInstanceOfSatisfying(
                         ItemCaptureException.class,
                         e -> assertThat(e.code()).isEqualTo(ItemCaptureCode.CONSENT_WITHHELD));
+    }
+
+    /**
+     * In a read-only snapshot a permit is kept, so a second capture that names the same contributor decides nothing
+     * again. Each capture still records its own copy of the contributor's content.
+     */
+    @Test
+    void shouldRecordEachCapturesCopyWhenAPermitIsKeptInOneSnapshot() {
+        var identities = mock(PersonIdentityResolver.class);
+        var accounts = mock(AccountDirectory.class);
+        var suppression = mock(PersonProcessingSuppression.class);
+        var copies = mock(PersonDataCopyRecorder.class);
+        var provider = new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com");
+        provider.setId(1L);
+        var identity = new PersonIdentity(1L, "11", null);
+        when(identities.accountFor(identity)).thenReturn(Optional.of(101L));
+        when(accounts.find(101))
+                .thenReturn(Optional.of(new AccountDirectory.AccountView(
+                        101, Account.Status.ACTIVE, "Author", AiChoice.CLOUD, Instant.now(), true)));
+        var consent = new ScmCaptureConsent(identities, accounts, suppression, copies);
+        TransactionSynchronizationManager.initSynchronization();
+        TransactionSynchronizationManager.setActualTransactionActive(true);
+        TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
+        TransactionSynchronizationManager.setCurrentTransactionIsolationLevel(Connection.TRANSACTION_REPEATABLE_READ);
+        try {
+            consent.require(List.of(person(provider, 11)));
+            consent.require(List.of(person(provider, 11)));
+        } finally {
+            TransactionSynchronizationManager.clear();
+        }
+
+        verify(identities, times(1)).accountFor(identity);
+        verify(copies, times(2)).recordIdentity(any());
     }
 
     @Test

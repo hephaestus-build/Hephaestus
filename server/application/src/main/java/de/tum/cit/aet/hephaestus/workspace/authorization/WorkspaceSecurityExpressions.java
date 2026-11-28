@@ -52,8 +52,7 @@ public class WorkspaceSecurityExpressions {
      * offers its own members, such as Hephaestus. Use in SpEL:
      * {@code @PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")}.
      *
-     * @return true if the caller (or, in a user view, the viewed member) holds a workspace
-     *     membership
+     * @return true if the caller holds a workspace membership
      */
     public boolean isMemberWithoutElevation() {
         return accessService.isMemberWithoutElevation();

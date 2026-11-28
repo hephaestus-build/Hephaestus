@@ -14,7 +14,6 @@ import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
 import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
-import de.tum.cit.aet.hephaestus.practices.review.PerPersonResults;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.ReviewResultQueryService;
@@ -47,7 +46,7 @@ import tools.jackson.databind.ObjectMapper;
 class FeedbackListVisibleReadIntegrationTest extends BaseIntegrationTest {
     private static final Instant AT = Instant.parse("2026-01-01T00:00:00Z");
     private static final FeedbackQueryFilter ALL = new FeedbackQueryFilter(
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
     @Autowired
     private ReviewIntegrationData data;
@@ -90,9 +89,6 @@ class FeedbackListVisibleReadIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcClient jdbc;
-
-    @Autowired
-    private PerPersonResults perPerson;
 
     @BeforeEach
     void clean() {
@@ -165,8 +161,9 @@ class FeedbackListVisibleReadIntegrationTest extends BaseIntegrationTest {
         assertThat(plans.fullScans(measured.sql())).isEmpty();
     }
 
+    /** ADR 0125: only feedback on the work names its developer, as the work itself does. */
     @Test
-    void shouldNameNoDeveloperOnPrivateFeedbackWhilePerPersonResultsAreOff() {
+    void shouldNameTheDeveloperOnlyOnFeedbackOnTheWork() {
         var scenario = data.scenario();
         authenticate(scenario);
         long ws = scenario.workspace().getId();
@@ -174,9 +171,6 @@ class FeedbackListVisibleReadIntegrationTest extends BaseIntegrationTest {
         var onWork = feedback(result, FeedbackDestination.ON_WORK, "Feedback on the work");
         var page = feedback(result, FeedbackDestination.PRACTICE_PAGE, "Private page text");
         var conversation = feedback(result, FeedbackDestination.CONVERSATION, "Private conversation text");
-        jdbc.sql("UPDATE workspace SET per_person_results_for_admins = false WHERE id = :ws")
-                .param("ws", ws)
-                .update();
         var policy = mock(ResultVisibilityPolicy.class);
         when(policy.permitsHistory(eq(ws), anyCollection(), eq(SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)))
                 .thenReturn(Set.of(result.getId()));
@@ -242,8 +236,7 @@ class FeedbackListVisibleReadIntegrationTest extends BaseIntegrationTest {
     // Substitute only the policy without adding a Spring context for this visibility matrix.
     private FeedbackListReadQuery query(ResultVisibilityPolicy policy) {
         var snapshots = new FeedbackBasisRead(basisRows, results, views, policy, resultPresentation);
-        return new FeedbackListReadQuery(
-                queries, snapshots, references, copies, responses, visibility, mapper, perPerson);
+        return new FeedbackListReadQuery(queries, snapshots, references, copies, responses, visibility, mapper);
     }
 
     private void authenticate(ReviewIntegrationData.Scenario scenario) {

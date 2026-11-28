@@ -54,7 +54,7 @@ function ResultsListRoute() {
 		...offsetPageParams,
 	});
 	useQueryReadRefusal(listOptions.queryKey, resultsQueryResult.isError, resultsQueryResult.error);
-	const { groups, practices, people } = useReviewScopeSources(workspaceSlug);
+	const { groups, practices } = useReviewScopeSources(workspaceSlug);
 	const record = useScopeRecordFilter(workspaceSlug, search);
 	const summaryPractice = onePracticeQuery(search);
 
@@ -65,7 +65,6 @@ function ResultsListRoute() {
 			results={pagedListState(resultsQueryResult, (result) => result.id)}
 			groups={groups}
 			practices={practices}
-			people={people}
 			record={record}
 			summary={
 				summaryPractice === undefined ? undefined : (

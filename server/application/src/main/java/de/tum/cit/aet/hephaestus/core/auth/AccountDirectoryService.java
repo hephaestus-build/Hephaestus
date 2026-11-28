@@ -5,10 +5,13 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
+import de.tum.cit.aet.hephaestus.core.auth.spi.CommittedConsentQuery;
 import de.tum.cit.aet.hephaestus.core.event.AiChoiceChangedEvent;
 import java.time.Clock;
 import java.time.ZoneId;
 import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -26,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @WorkspaceAgnostic("Account status and choices span all workspaces")
 @RequiredArgsConstructor
-public class AccountDirectoryService implements AccountDirectory {
+public class AccountDirectoryService implements AccountDirectory, CommittedConsentQuery {
     /** The zone ids this runtime knows. A stored id can be unknown after a time zone data update. */
     private static final Set<String> KNOWN_ZONES = Set.copyOf(ZoneId.getAvailableZoneIds());
 
@@ -42,10 +45,26 @@ public class AccountDirectoryService implements AccountDirectory {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<Consent> committedConsent(long accountId) {
+        return accounts.findCommittedConsent(accountId)
+                .map(row -> new Consent(row.getStatus(), row.getAiChoice(), row.getFeedbackDeliveryEnabled()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Map<Long, AccountView> findAll(Collection<Long> accountIds) {
         return accounts.findAllById(accountIds).stream()
                 .map(AccountDirectoryService::view)
                 .collect(Collectors.toUnmodifiableMap(AccountView::id, Function.identity()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<AccountView> activeInstanceAdmins() {
+        return accounts.findAllById(accounts.findActiveAdministratorIds()).stream()
+                .map(AccountDirectoryService::view)
+                .sorted(Comparator.comparing(AccountView::displayName).thenComparingLong(AccountView::id))
+                .toList();
     }
 
     @Override
@@ -77,6 +96,8 @@ public class AccountDirectoryService implements AccountDirectory {
             throw new IllegalStateException("Only an active account can choose AI use");
         account.setAiChoice(choice);
         account.setAiChoiceAt(choice == null ? null : clock.instant());
+        // This write discloses only the workspace scope, so a personal confirmation no longer covers the choice.
+        account.setAiPersonalScopeAt(null);
         accounts.save(account);
         events.publishEvent(new AiChoiceChangedEvent(accountId));
     }

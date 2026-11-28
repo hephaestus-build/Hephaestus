@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.core.auth.dto.AccountRefDTO;
 import de.tum.cit.aet.hephaestus.core.auth.validation.AccountId;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
-import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
@@ -61,9 +60,7 @@ public class MembershipController {
     @GetMapping("/me")
     @Operation(operationId = "getOwnMembership", summary = "Get your workspace membership")
     public ResponseEntity<WorkspaceMembershipDTO> getCurrentUserMembership(WorkspaceContext context) {
-        var view = UserViewContextHolder.get();
-        Membership membership = workspaceMembershipService.getMembership(
-                context.id(), view == null ? CurrentAccount.requireId() : view.accountId());
+        Membership membership = workspaceMembershipService.getMembership(context.id(), CurrentAccount.requireId());
         WorkspaceRole effectiveRole =
                 context.roles().stream().reduce(WorkspaceRole::highest).orElse(membership.getRole());
         if (effectiveRole != WorkspaceRole.OWNER

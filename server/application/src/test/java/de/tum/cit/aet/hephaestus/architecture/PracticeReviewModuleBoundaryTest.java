@@ -28,7 +28,8 @@ class PracticeReviewModuleBoundaryTest {
                         "..integration.chat..",
                         "..integration.docs..",
                         "..integration.slack..",
-                        "..integration.outline..")
+                        "..integration.outline..",
+                        "..integration.submission..")
                 .because("domain adapters resolve provider identity and evidence through neutral ports")
                 .check(classes);
     }

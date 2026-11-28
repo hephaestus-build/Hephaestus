@@ -471,6 +471,14 @@ class CascadeTableTest extends BaseUnitTest {
             Map.entry("PostgreSQL product feedback cleanup", EnumSet.noneOf(CascadeDependent.class)),
             // Outside the inventory until the next release registers its stores; nothing writes it before then.
             Map.entry("PostgreSQL practice advice", EnumSet.noneOf(CascadeDependent.class)),
+            // Outside the inventory until the next release registers its stores; nothing writes it before then.
+            Map.entry("PostgreSQL mentor intake", EnumSet.noneOf(CascadeDependent.class)),
+            // Outside the inventory until the next release registers its stores; nothing writes it before then.
+            Map.entry("PostgreSQL project teams", EnumSet.noneOf(CascadeDependent.class)),
+            // Outside the inventory until the next release registers its stores; nothing writes it before then.
+            Map.entry("PostgreSQL host pairing and team grants", EnumSet.noneOf(CascadeDependent.class)),
+            // Outside the inventory until the next release registers its stores; nothing writes it before then.
+            Map.entry("PostgreSQL submitted team work", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("PostgreSQL retained occasion evidence", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("Temporary review capture and context copies", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry(
@@ -485,6 +493,8 @@ class CascadeTableTest extends BaseUnitTest {
                     "GitHub product feedback repositories, public and private", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("GitHub/GitLab/Slack delivery destination", EnumSet.of(CascadeDependent.POSTED_SLACK_MESSAGE)),
             Map.entry("Application metrics", EnumSet.noneOf(CascadeDependent.class)),
+            // Ids, times and a digest, never an entry's words. No store names it until #5364.
+            Map.entry("PostgreSQL support shares", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("Optional trace export and log collection", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("External avatar hosts and browser caches", EnumSet.noneOf(CascadeDependent.class)),
             Map.entry("Container logs and support bundles", EnumSet.noneOf(CascadeDependent.class)),

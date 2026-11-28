@@ -1,0 +1,4 @@
+# #5299 (ADR 0164): staff see no person's private content. The person-data download, View as user and the
+# requester of a review run are removed, and a disagreement's explanation shows to staff for 30 days only.
+# .changeset/staff-see-no-private-content.md and .migration/staff-see-no-private-content.md tell API clients.
+in API GET /workspaces/{workspaceSlug}/practices/reviews/results/{resultId} the response property `disagreements/items/comment` became nullable for the status `200`

@@ -9,7 +9,6 @@ export const TIME_ORDERS = ["NEWEST", "OLDEST"] as const;
 export type TimeOrder = (typeof TIME_ORDERS)[number];
 
 export interface ReviewScope {
-	developerId?: string;
 	groupSlug?: string[];
 	practiceSlug?: string[];
 	from?: string;
@@ -41,7 +40,6 @@ export type ScopeSource = Omit<ReviewScope, "order"> & { order?: string };
 
 /** One part of the scope, as the toolbar shows it. */
 export type ScopeFacet =
-	| "developer"
 	| "group"
 	| "practice"
 	| "dates"
@@ -63,10 +61,10 @@ const SELECTION: readonly ScopeFacet[] = ["review", "item", "result"];
  */
 export const SCOPE_APPLIES: Record<ReviewTab, readonly ScopeFacet[]> = {
 	overview: [],
-	reviews: ["developer", "group", "practice", "dates", "review", "item"],
-	results: ["developer", "group", "practice", "dates", "kind", ...SELECTION],
-	problems: ["developer", "group", "practice", "dates", "kind", ...SELECTION, "problem"],
-	feedback: ["developer", "group", "practice", "dates", "kind", "review", "item"],
+	reviews: ["group", "practice", "dates", "review", "item"],
+	results: ["group", "practice", "dates", "kind", ...SELECTION],
+	problems: ["group", "practice", "dates", "kind", ...SELECTION, "problem"],
+	feedback: ["group", "practice", "dates", "kind", "review", "item"],
 };
 
 function present<T>(values: T[] | undefined): T[] | undefined {
@@ -79,7 +77,6 @@ function timeOrder(order: string | undefined): TimeOrder | undefined {
 
 export function readScope(search: ScopeSource): ReviewScope {
 	return {
-		developerId: search.developerId,
 		groupSlug: present(search.groupSlug),
 		practiceSlug: present(search.practiceSlug),
 		from: search.from,
@@ -109,7 +106,6 @@ export function carriedScope(previous: ScopeSource): ReviewScope {
  */
 export function clearedScopeFilters(): ReviewScope {
 	return {
-		developerId: undefined,
 		groupSlug: undefined,
 		practiceSlug: undefined,
 		from: undefined,
@@ -133,9 +129,6 @@ export function clearedScope(): ReviewScope {
 /** The parts of the scope that hold a value. */
 export function setScopeFacets(scope: ReviewScope): ScopeFacet[] {
 	const set: ScopeFacet[] = [];
-	if (hasText(scope.developerId)) {
-		set.push("developer");
-	}
 	if ((scope.groupSlug?.length ?? 0) > 0) {
 		set.push("group");
 	}

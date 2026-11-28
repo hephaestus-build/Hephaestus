@@ -26,6 +26,7 @@ public class PracticesWorkspacePurgeAdapter implements WorkspacePurgeContributor
         rows.deleteWorkspaceReviews(ws);
         rows.deleteWorkspaceBatches(ws);
         rows.deleteWorkspaceSchedules(ws);
+        rows.deleteWorkspaceSetups(ws);
         rows.deferConstraints();
         rows.deleteWorkspaceVersions(ws);
         rows.deleteWorkspacePractices(ws);

@@ -16,9 +16,6 @@ public record ReviewQueueItemDTO(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean heldForBudget,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) ItemRefDTO item,
 
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
-        ReviewPersonDTO person,
-
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant since,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable

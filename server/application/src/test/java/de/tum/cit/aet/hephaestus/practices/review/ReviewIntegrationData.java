@@ -119,8 +119,6 @@ public class ReviewIntegrationData {
     private Scenario scenario(ItemKind kind, PracticeDefinition definition, long sourceId, String practiceSlug) {
         var workspace = WorkspaceTestFixtures.activeWorkspace("s5-" + UUID.randomUUID());
         workspace.getFeatures().setPracticesEnabled(true);
-        // A workspace that ran reviews before the setting existed keeps per-person results for its admins.
-        workspace.setPerPersonResultsForAdmins(true);
         workspaces.saveAndFlush(workspace);
         var account = accounts.saveAndFlush(new Account("S5 developer"));
         var membership = new Membership();
@@ -498,6 +496,15 @@ public class ReviewIntegrationData {
                 .param("review", review.getId())
                 .update();
         return review;
+    }
+
+    /** The same, on the review that recorded {@code result}. */
+    @Transactional
+    public void withheldAtCreation(Scenario s, Result result) {
+        withheldAtCreation(
+                s,
+                reviews.findByIdAndWorkspaceId(result.getReviewId(), result.getWorkspaceId())
+                        .orElseThrow());
     }
 
     /** A practice that the review withheld when it was created, before any attempt, as readiness does. */

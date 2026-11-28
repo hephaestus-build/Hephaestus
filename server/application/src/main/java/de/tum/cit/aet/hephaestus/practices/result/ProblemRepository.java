@@ -34,6 +34,13 @@ public interface ProblemRepository extends JpaRepository<Problem, UUID> {
 
     List<Problem> findByWorkspaceIdAndIdIn(long workspaceId, Collection<UUID> ids);
 
+    /** Shares the key lock of each problem in id order, so an advice source never names a problem being deleted. */
+    @Query(
+            value = "SELECT p.id FROM problem p WHERE p.workspace_id=:workspaceId AND p.id=ANY(CAST(:ids AS uuid[]))"
+                    + " ORDER BY p.id FOR KEY SHARE",
+            nativeQuery = true)
+    List<UUID> shareKeysInIdOrder(@Param("workspaceId") long workspaceId, @Param("ids") UUID[] ids);
+
     /** The identity of each of the problems that has one. */
     @Query("""
         SELECT new de.tum.cit.aet.hephaestus.practices.result.ProblemRepository$Identity(p.id, p.identity)

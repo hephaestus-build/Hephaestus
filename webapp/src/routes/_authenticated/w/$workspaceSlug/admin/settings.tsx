@@ -10,7 +10,6 @@ import { SuspendedWorkspaceCard } from "@/components/admin/settings/SuspendedWor
 import { WorkspaceDangerZoneSettings } from "@/components/admin/settings/WorkspaceDangerZoneSettings";
 import { WorkspaceMcpClientGrantsSection } from "@/components/admin/settings/WorkspaceMcpClientGrantsSection";
 import { WorkspacePasskeyPolicySection } from "@/components/admin/settings/WorkspacePasskeyPolicySection";
-import { WorkspacePerPersonResultsSettings } from "@/components/admin/settings/WorkspacePerPersonResultsSettings";
 import { WorkspaceSettingsPage } from "@/components/admin/settings/WorkspaceSettingsPage";
 import { WorkspaceSetupSummary } from "@/components/admin/settings/WorkspaceSetupSummary";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -19,7 +18,6 @@ import { PageLayout } from "@/components/layout/PageLayout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspaceDangerZone } from "@/hooks/use-workspace-danger-zone";
-import { useWorkspacePerPersonResults } from "@/hooks/use-workspace-per-person-results";
 import { useWorkspacePublicActivity } from "@/hooks/use-workspace-public-activity";
 import { useWorkspaceSetup } from "@/hooks/use-workspace-setup";
 import { workspaceAdminHead } from "@/lib/page-title";
@@ -109,7 +107,6 @@ function ActiveSettings() {
 	const routeSlug = Route.useParams().workspaceSlug;
 	const passkeys = useWorkspacePasskeySettings({ workspaceSlug: routeSlug });
 	const mcpClients = useWorkspaceMcpClientGrants({ workspaceSlug: routeSlug });
-	const perPersonResults = useWorkspacePerPersonResults(routeSlug);
 	const {
 		adminWorkspaceSlug: workspaceSlug,
 		isLoading: isWorkspaceLoading,
@@ -153,12 +150,6 @@ function ActiveSettings() {
 		settings = (
 			<WorkspaceSettingsPage
 				setupSummary={<WorkspaceSetupSummary workspaceSlug={workspaceSlug} state={setup} />}
-				perPersonResults={
-					<WorkspacePerPersonResultsSettings
-						workspaceName={workspace.displayName}
-						{...perPersonResults}
-					/>
-				}
 				security={<WorkspacePasskeyPolicySection {...passkeys} />}
 				mcpClients={
 					mcpClients === undefined ? undefined : <WorkspaceMcpClientGrantsSection {...mcpClients} />

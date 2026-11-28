@@ -15,7 +15,6 @@ import { ResultRows, type ResultRowsState } from "./ResultRows";
 import { clearedScope } from "./review-scope";
 import type { ResultsSearch } from "./review-search";
 import { loadingMoreRows, ReviewListEnd } from "./ReviewListEnd";
-import type { ReviewPeople } from "./ReviewPersonFacet";
 import type { ScopeRecordFilter } from "./ReviewScopeFilters";
 import { ReviewTabIntro } from "./ReviewTabIntro";
 
@@ -25,7 +24,6 @@ export interface ResultsListPageProps {
 	results: PagedListState<ReviewResult>;
 	groups: FacetSource;
 	practices: FacetSource;
-	people: ReviewPeople;
 	record?: ScopeRecordFilter;
 	summary?: ReactNode;
 }
@@ -48,13 +46,10 @@ export function ResultsListPage({
 	results,
 	groups,
 	practices,
-	people,
 	record,
 	summary,
 }: ResultsListPageProps) {
 	const rows = results.status === "ready" ? results.rows : [];
-	// Only a developer filter makes the first row's name safe to use for that developer.
-	const filteredDeveloper = search.developerId === undefined ? undefined : rows[0]?.person;
 	const hasFilter = hasResultFilter(search);
 	const reset = () => onSearchChange(clearedResultFilters());
 	const byDay = search.order !== "ACTIONABILITY";
@@ -75,28 +70,18 @@ export function ResultsListPage({
 				}
 				groups={groups}
 				practices={practices}
-				people={people}
 				total={results.status === "ready" ? results.total : undefined}
-				subjectName={
-					filteredDeveloper?.displayName ?? filteredDeveloper?.providerLogin ?? undefined
-				}
 				record={record}
 			/>
 			{summary}
 			{results.status === "error" && (
-				<ResultRows
-					named={people.named}
-					state={{ status: "error", error: results.error, onRetry: results.onRetry }}
-				/>
+				<ResultRows state={{ status: "error", error: results.error, onRetry: results.onRetry }} />
 			)}
-			{results.status === "loading" && (
-				<ResultRows named={people.named} state={{ status: "loading" }} />
-			)}
+			{results.status === "loading" && <ResultRows state={{ status: "loading" }} />}
 			{results.status === "ready" && (
 				<>
 					<ReviewListRefresh failure={results.refreshFailure} noun="observations" />
 					<ResultRows
-						named={people.named}
 						state={resultsState(rows, hasFilter ? reset : undefined)}
 						byDay={byDay}
 						loadingMore={loadingMoreRows(results)}

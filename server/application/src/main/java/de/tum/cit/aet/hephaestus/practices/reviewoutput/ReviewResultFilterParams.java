@@ -19,7 +19,6 @@ public record ReviewResultFilterParams(
         @Nullable String itemKind,
         @Nullable String practiceSlug,
         @Nullable String groupSlug,
-        @Positive @Nullable Long personId,
         @Nullable List<ResultOutcome> outcome,
         @Nullable List<Severity> severity,
         @Nullable Currentness currentness,
@@ -41,7 +40,8 @@ public record ReviewResultFilterParams(
                 itemKind,
                 practiceSlug,
                 groupSlug,
-                personId,
+                // A staff read never selects a person (ADR 0125).
+                null,
                 outcome,
                 severity,
                 currentness,

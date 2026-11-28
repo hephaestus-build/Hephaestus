@@ -44,6 +44,11 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultRetentionService;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewItemCustody;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewItemRepository;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewSummaryQueryService;
+import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewAudienceDTO;
+import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewCoverageDTO;
+import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewItemCountsDTO;
+import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewPracticeDTO;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanMembershipQueries;
@@ -54,13 +59,14 @@ import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustodyQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.PracticeLevel;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.RemovalGuardState;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAttemptGuard;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAudience;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBudget;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCaptureDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCompletion;
@@ -77,6 +83,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewTimingFactsQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewVersionKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ScanExcludedItem;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.sql.Timestamp;
@@ -146,6 +153,9 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     ScanReportService reports;
+
+    @Autowired
+    ReviewSummaryQueryService summaries;
 
     @Autowired
     ResultMarkService marks;
@@ -286,8 +296,7 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
         var scan = data.scan(scenario, status, Instant.now());
         if (!status.isTerminal())
             invocation(scan.getWorkspaceId(), scan.getId(), ReviewJobStatus.valueOf(status.name()));
-        var adapter = new ReviewRuntimeQueryAdapter(
-                jobs, mock(ReviewAssignmentQuery.class), runtimeRows, mock(ReviewTimingFactsQuery.class));
+        var adapter = new ReviewRuntimeQueryAdapter(jobs, runtimeRows, mock(ReviewTimingFactsQuery.class));
         when(runtime.jobCounts(anyLong(), anyCollection()))
                 .thenAnswer(call -> adapter.jobCounts(call.getArgument(0), call.getArgument(1)));
         when(runtime.usage(scan.getWorkspaceId(), scan.getId()))
@@ -356,8 +365,7 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
                 .param("ws", scan.getWorkspaceId())
                 .param("review", scan.getId())
                 .update();
-        var adapter = new ReviewRuntimeQueryAdapter(
-                jobs, mock(ReviewAssignmentQuery.class), runtimeRows, mock(ReviewTimingFactsQuery.class));
+        var adapter = new ReviewRuntimeQueryAdapter(jobs, runtimeRows, mock(ReviewTimingFactsQuery.class));
         when(runtime.jobCounts(scan.getWorkspaceId(), List.of(scan.getId())))
                 .thenAnswer(call -> adapter.jobCounts(scan.getWorkspaceId(), List.of(scan.getId())));
         when(runtime.usage(scan.getWorkspaceId(), scan.getId()))
@@ -889,6 +897,28 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
                 current.getWorkspaceId(), current.getId(), Instant.now().plusSeconds(60));
         var id = new ReviewAssignmentId(current.getId(), result.getPracticeId(), result.getItemId());
         assertThat(store.reuse(current.getWorkspaceId(), id)).contains(result.getId());
+    }
+
+    @Test
+    void shouldReadAnOlderScanAsOperationalAndCountItsReusedPairAsReviewed() {
+        var original = data.scan(scenario, ReviewStatus.COMPLETE, Instant.now().minusSeconds(120));
+        var result = data.result(scenario, original);
+        var current = data.scan(scenario, ReviewStatus.RUNNING, Instant.now().minusSeconds(10));
+        var id = new ReviewAssignmentId(current.getId(), result.getPracticeId(), result.getItemId());
+        assertThat(store.reuse(current.getWorkspaceId(), id)).contains(result.getId());
+        data.terminal(current, ReviewStatus.COMPLETE, null);
+
+        var summary = summaries.summary(reports.require(current.getWorkspaceId(), current.getId()));
+
+        assertThat(summary.audience()).isEqualTo(new ReviewAudienceDTO(ReviewAudience.OPERATIONAL, null));
+        assertThat(summary.versionKind()).isEqualTo(ReviewVersionKind.REPOSITORY_COMMIT);
+        assertThat(summary.setup()).isNull();
+        assertThat(summary.reviewedVersion()).isNull();
+        assertThat(summary.change()).isNull();
+        assertThat(summary.practices()).extracting(ReviewPracticeDTO::level).containsOnly(PracticeLevel.MEMBER);
+        // The one planned pair is reviewed, and it is the reused one.
+        assertThat(summary.coverage())
+                .containsExactly(new ReviewCoverageDTO(PracticeLevel.MEMBER, new ReviewItemCountsDTO(1, 1, 1, 0, 0)));
     }
 
     @Test

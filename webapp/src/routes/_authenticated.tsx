@@ -3,7 +3,6 @@ import { currentTenantSlug } from "@/runtime/workspace-address";
 
 import { PageSkeleton } from "@/components/layout/PageSkeleton";
 import { consentIsPending, resolveCurrentUser, startGateReads } from "@/runtime/auth/guard";
-import { getUserViewSession } from "@/runtime/user-view/session";
 
 export const Route = createFileRoute("/_authenticated")({
 	beforeLoad: async ({ context, location, matches }) => {
@@ -23,26 +22,6 @@ export const Route = createFileRoute("/_authenticated")({
 						? { to: location.pathname, search: location.search, hash: location.hash }
 						: undefined,
 			});
-		}
-		const viewed = getUserViewSession();
-		if (viewed) {
-			const workspacePath = `/w/${viewed.workspaceSlug}`;
-			const conversationRoute = matches.some(
-				(match) => match.routeId === "/_authenticated/w/$workspaceSlug/conversation",
-			);
-			if (
-				(location.pathname !== workspacePath &&
-					!location.pathname.startsWith(`${workspacePath}/`)) ||
-				location.pathname.startsWith(`${workspacePath}/admin`) ||
-				location.pathname === `${workspacePath}/onboarding` ||
-				conversationRoute
-			) {
-				throw redirect({
-					to: "/w/$workspaceSlug",
-					params: { workspaceSlug: viewed.workspaceSlug },
-					replace: true,
-				});
-			}
 		}
 		const workspaceSlug = matches.find(
 			(match) => match.routeId === "/_authenticated/w/$workspaceSlug",

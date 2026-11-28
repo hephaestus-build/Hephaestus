@@ -14,7 +14,6 @@ import type { PracticeFacetOption } from "./ResultFilters";
 import { clearedScope } from "./review-scope";
 import type { ProblemsSearch } from "./review-search";
 import { loadingMoreRows, ReviewListEnd } from "./ReviewListEnd";
-import type { ReviewPeople } from "./ReviewPersonFacet";
 import type { ScopeRecordFilter } from "./ReviewScopeFilters";
 import { ReviewTabIntro } from "./ReviewTabIntro";
 
@@ -24,7 +23,6 @@ export interface ProblemsListPageProps {
 	problems: PagedListState<ReviewProblem>;
 	groups: FacetSource;
 	practices: FacetSource<PracticeFacetOption>;
-	people: ReviewPeople;
 	record?: ScopeRecordFilter;
 }
 
@@ -46,11 +44,9 @@ export function ProblemsListPage({
 	problems,
 	groups,
 	practices,
-	people,
 	record,
 }: ProblemsListPageProps) {
 	const rows = problems.status === "ready" ? problems.rows : [];
-	const filteredDeveloper = search.developerId === undefined ? undefined : rows[0]?.person;
 	const reset = () => onSearchChange(clearedProblemFilters());
 
 	return (
@@ -63,27 +59,19 @@ export function ProblemsListPage({
 				onClearScope={() => onSearchChange(clearedScope())}
 				groups={groups}
 				practices={practices}
-				people={people}
 				total={problems.status === "ready" ? problems.total : undefined}
-				subjectName={
-					filteredDeveloper?.displayName ?? filteredDeveloper?.providerLogin ?? undefined
-				}
 				record={record}
 			/>
 			{problems.status === "error" && (
 				<ProblemRows
-					named={people.named}
 					state={{ status: "error", error: problems.error, onRetry: problems.onRetry }}
 				/>
 			)}
-			{problems.status === "loading" && (
-				<ProblemRows named={people.named} state={{ status: "loading" }} />
-			)}
+			{problems.status === "loading" && <ProblemRows state={{ status: "loading" }} />}
 			{problems.status === "ready" && (
 				<>
 					<ReviewListRefresh failure={problems.refreshFailure} noun="problems" />
 					<ProblemRows
-						named={people.named}
 						state={problemsState(rows, hasProblemFilter(search) ? reset : undefined)}
 						loadingMore={loadingMoreRows(problems)}
 					/>

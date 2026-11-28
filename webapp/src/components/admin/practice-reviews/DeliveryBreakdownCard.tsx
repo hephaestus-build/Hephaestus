@@ -69,7 +69,7 @@ export function DeliveryBreakdownCard({
 					<SplitIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
 					<CardTitleLink
 						workspaceSlug={workspaceSlug}
-						destination={{ list: "feedback", search: scopeSearch(scope, "feedback") }}
+						destination={{ list: "feedback", search: scopeSearch(scope) }}
 					>
 						Delivered and withheld
 					</CardTitleLink>

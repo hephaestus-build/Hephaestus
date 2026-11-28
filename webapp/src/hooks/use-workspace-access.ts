@@ -22,13 +22,13 @@ export function useWorkspaceAccess() {
 		error: workspacesError,
 	} = useActiveWorkspaceSlug();
 	const queryClient = useQueryClient();
-	const { isAuthenticated, isLoading: authLoading, isAppAdmin, userView, username } = useAuth();
+	const { isAuthenticated, isLoading: authLoading, isAppAdmin, username } = useAuth();
 	const match = useMatch({
 		from: "/_authenticated/w/$workspaceSlug",
 		shouldThrow: false,
 	});
 	const target = match?.context.administrationWorkspace;
-	const administrationTarget = isAppAdmin && userView === undefined ? target : undefined;
+	const administrationTarget = isAppAdmin ? target : undefined;
 	// The target identity survives a pending or refused read; member chrome cannot take its place.
 	const chromeWorkspaceSlug = administrationTarget === undefined ? memberWorkspaceSlug : undefined;
 	const chromeWorkspace = administrationTarget === undefined ? memberWorkspace : undefined;
@@ -68,9 +68,7 @@ export function useWorkspaceAccess() {
 		adminWorkspaceSlug:
 			administrationTarget === undefined ? chromeWorkspaceSlug : administrationTarget.workspaceSlug,
 		role,
-		isAdmin:
-			!userView &&
-			(administrationWorkspace !== undefined || hasMinimumWorkspaceRole(role, "ADMIN")),
+		isAdmin: administrationWorkspace !== undefined || hasMinimumWorkspaceRole(role, "ADMIN"),
 		// Sign-in usernames can name another linked identity; workspace activity needs this provider's login.
 		selfLogin:
 			chromeWorkspaceSlug === undefined || membershipQuery.isError

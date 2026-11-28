@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.trace.ItemTraceQueryService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
@@ -130,7 +131,7 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
         };
         long ws = scenario.workspace().getId();
         long itemId = Objects.requireNonNull(scenario.item().getId());
-        var everything = new ReviewFilterParams(null, null, null, null, null, null, null, null, null, null, null);
+        var everything = new ReviewFilterParams(null, null, null, null, null, null, null, null, null, null);
 
         var scan = scans.scan(scanned, ReviewStatus.COMPLETE, Instant.now());
         scans.result(scanned, scan);
@@ -169,11 +170,8 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
             var event = eventOfReview.get(result.getReviewId());
             if (event == null) {
                 assertThat(summary.startedBy()).isNull();
-                assertThat(Objects.requireNonNull(summary.requestedBy()).id())
-                        .isEqualTo(Long.toString(scenarioAccountId));
             } else {
                 assertThat(Objects.requireNonNull(summary.startedBy()).id()).isEqualTo(event);
-                assertThat(summary.requestedBy()).isNull();
             }
             var reviewed = summary.practices().stream()
                     .filter(practice ->
@@ -307,12 +305,10 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
         get("/practices/reviews/" + r.getReviewId()).expectStatus().isNotFound().expectBody(Void.class);
     }
 
+    /** ADR 0125: who requested a review is usually whose work it is, so no staff read names them. */
     @Test
-    void shouldNameNoRequesterWhilePerPersonResultsAreOff() {
+    void shouldNameNoRequester() {
         var result = data.result(scenario, ResultOutcome.NOT_MET, Instant.now());
-        jdbc.sql("UPDATE workspace SET per_person_results_for_admins = false WHERE id = :ws")
-                .param("ws", scenario.workspace().getId())
-                .update();
 
         get("/practices/reviews")
                 .expectStatus()
@@ -341,8 +337,6 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(result.getReviewId().toString())
                 .jsonPath("$.content[0].origin")
                 .isEqualTo("REQUEST")
-                .jsonPath("$.content[0].requestedBy.id")
-                .isEqualTo(Long.toString(scenarioAccountId))
                 .jsonPath("$.content[0].practices[0].practiceVersionId")
                 .isEqualTo(Long.toString(Objects.requireNonNull(
                         scenario.practice().getCurrentVersion().getId())))
@@ -433,7 +427,9 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
                 .jsonPath("$.content[0].progress.practicesTotal")
                 .isEqualTo(3)
                 .jsonPath("$.content[0].progress.continuing")
-                .isEqualTo(true);
+                .isEqualTo(true)
+                .jsonPath("$.content[0].progress.stage")
+                .isEqualTo("CONTINUING");
         get("/practices/reviews/" + review.getId())
                 .expectStatus()
                 .isOk()
@@ -456,21 +452,10 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(true);
     }
 
+    /** ADR 0125: the queue shows the waiting work, never whose work it is. */
     @Test
-    void shouldNameNoDeveloperInTheQueueWhilePerPersonResultsAreOff() {
+    void shouldNameNoDeveloperInTheQueue() {
         var review = data.queuedReviewOfOnePerson(scenario, scenarioAccountId);
-        get("/practices/reviews/queue")
-                .expectStatus()
-                .isOk()
-                .expectBody()
-                .jsonPath("$.head[0].reviewId")
-                .isEqualTo(review.getId().toString())
-                .jsonPath("$.head[0].person.accountId")
-                .isEqualTo(Long.toString(scenarioAccountId));
-
-        jdbc.sql("UPDATE workspace SET per_person_results_for_admins = false WHERE id = :ws")
-                .param("ws", scenario.workspace().getId())
-                .update();
 
         get("/practices/reviews/queue")
                 .expectStatus()
@@ -479,7 +464,7 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
                 .jsonPath("$.head[0].reviewId")
                 .isEqualTo(review.getId().toString())
                 .jsonPath("$.head[0].person")
-                .isEmpty();
+                .doesNotExist();
     }
 
     @Test
@@ -500,14 +485,96 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldReportNoProgressForAFinishedReview() {
-        data.result(scenario, ResultOutcome.MET, Instant.parse("2026-10-20T00:00:00Z"));
-        get("/practices/reviews")
+    void shouldReportAFinishedReviewAsReady() {
+        var result = data.result(scenario, ResultOutcome.MET, Instant.parse("2026-10-20T00:00:00Z"));
+        get("/practices/reviews/" + result.getReviewId())
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.content[0].progress")
-                .isEmpty();
+                .jsonPath("$.progress.stage")
+                .isEqualTo("READY");
+    }
+
+    @Test
+    void shouldNotReportAReviewThatCheckedEveryPracticeAsPartlyChecked() {
+        // Settlement closes an admitted review as partial when no attempt confirmed its feedback composition.
+        var result = data.result(
+                scenario,
+                ResultOutcome.MET,
+                Instant.parse("2026-10-20T00:00:00Z"),
+                ReviewStatus.PARTIAL,
+                ReviewStopReason.COMPOSITION_UNCONFIRMED);
+
+        get("/practices/reviews/" + result.getReviewId())
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.progress.stage")
+                .isEqualTo("READY");
+    }
+
+    @Test
+    void shouldReportAnEndedReviewThatLeftAPracticeUncheckedAsPartlyChecked() {
+        var result = data.result(
+                scenario,
+                ResultOutcome.MET,
+                Instant.parse("2026-10-20T00:00:00Z"),
+                ReviewStatus.PARTIAL,
+                ReviewStopReason.READINESS_REFUSED);
+        data.withheldAtCreation(scenario, result);
+
+        get("/practices/reviews/" + result.getReviewId())
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.progress.stage")
+                .isEqualTo("PARTLY_CHECKED");
+    }
+
+    @Test
+    void shouldReportObservationsAsReadyOnlyOnceTheyAreSealed() {
+        // Every practice ended, but the attempt keeps what it staged private until the seal.
+        var staged = data.continuingReview(scenario, scenarioAccountId, 2, 2);
+        var sealed = data.result(
+                scenario, ResultOutcome.MET, Instant.parse("2026-10-20T00:00:00Z"), ReviewStatus.RUNNING, null);
+
+        get("/practices/reviews/" + staged.getId())
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.progress.stage")
+                .isEqualTo("CHECKING");
+        get("/practices/reviews/" + sealed.getReviewId())
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.progress.stage")
+                .isEqualTo("OBSERVATIONS_READY");
+    }
+
+    @Test
+    void shouldReportAnEndedReviewThatCheckedNothingAsWithheld() {
+        var review = data.activeReview(
+                scenario, scenarioAccountId, ReviewStatus.QUEUED, Instant.parse("2026-10-20T00:00:00Z"), null);
+        jdbc.sql("UPDATE review_item SET state = 'WITHHELD', reason = 'READINESS_REFUSED'"
+                        + " WHERE review_id = :id AND workspace_id = :ws")
+                .param("id", review.getId())
+                .param("ws", scenario.workspace().getId())
+                .update();
+        jdbc.sql("UPDATE review SET status = 'PARTIAL', stop_reason = 'READINESS_REFUSED', completed_at = now()"
+                        + " WHERE id = :id AND workspace_id = :ws")
+                .param("id", review.getId())
+                .param("ws", scenario.workspace().getId())
+                .update();
+
+        get("/practices/reviews/" + review.getId())
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.progress.stage")
+                .isEqualTo("WITHHELD")
+                .jsonPath("$.progress.practicesTotal")
+                .isEqualTo(0);
     }
 
     @Test

@@ -59,6 +59,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.node.JsonNodeFactory;
 
 @TestPropertySource(properties = "hephaestus.integration.outline.enabled=true")
@@ -67,6 +68,9 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @Autowired
     private PersonDataService service;
@@ -545,7 +549,9 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
         }
         var preview = service.preview(
                 adminId, null, List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), target, null)));
-        var export = service.export(preview.request().getId()).path("stores");
+        var export = PersonDataBundles.of(
+                        service, transactionManager, preview.request().getId())
+                .path("stores");
         assertThat(export.path("outline_document_content").size()).isEqualTo(2);
         assertThat(export.path("outline_document_editor").size()).isEqualTo(1);
         assertThat(export.path("outline_document_collaborator").size()).isEqualTo(1);

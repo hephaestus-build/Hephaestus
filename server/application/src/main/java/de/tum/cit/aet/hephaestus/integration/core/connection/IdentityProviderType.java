@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import org.jspecify.annotations.Nullable;
 
 /**
  * High-level identity provider type.
@@ -9,18 +10,20 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
  * without coupling to the specific authentication mechanism. {@link #GITHUB}/{@link #GITLAB}
  * are SCM providers; {@link #SLACK} is a messaging identity provider (federated login +
  * DM conversation) and {@link #OUTLINE} is a documentation identity provider (link-only OAuth,
- * document authorship attribution) — neither has an SCM sync surface.
+ * document authorship attribution) — neither has an SCM sync surface. {@link #OIDC} is an OpenID Connect
+ * sign-in issuer: it is no integration, so it has no {@link IntegrationKind}, connection, sync or activity.
  */
 public enum IdentityProviderType {
     GITHUB(IntegrationKind.GITHUB, true),
     GITLAB(IntegrationKind.GITLAB, true),
     SLACK(IntegrationKind.SLACK, false),
-    OUTLINE(IntegrationKind.OUTLINE, false);
+    OUTLINE(IntegrationKind.OUTLINE, false),
+    OIDC(null, false);
 
-    private final IntegrationKind kind;
+    private final @Nullable IntegrationKind kind;
     private final boolean scm;
 
-    IdentityProviderType(IntegrationKind kind, boolean scm) {
+    IdentityProviderType(@Nullable IntegrationKind kind, boolean scm) {
         this.kind = kind;
         this.scm = scm;
     }
@@ -42,8 +45,8 @@ public enum IdentityProviderType {
                 "IntegrationKind " + kind + " is not an SCM kind and has no IdentityProviderType");
     }
 
-    /** The integration this provider is served by; the SPI vocabulary agent code dispatches on. */
-    public IntegrationKind kind() {
+    /** The integration this provider is served by; the SPI vocabulary agent code dispatches on. Null for OIDC. */
+    public @Nullable IntegrationKind kind() {
         return kind;
     }
 }

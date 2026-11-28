@@ -10,6 +10,8 @@
 
 **Relates to:** [ADR 0094](0094-a-provider-mirror-changes-only-on-a-definitive-answer-and-a-tombstone-is-not-an-erasure.md), [ADR 0090](0090-a-review-cites-only-captured-bytes-and-admission-verifies-each-citation-once.md)
 
+**Amended by:** [ADR 0165](0165-a-team-reviews-immutable-submitted-versions-within-its-own-scope.md) (proposed: capture packages beside the list in decision 1)
+
 ## Context
 
 Hephaestus connects to GitHub, GitLab, Slack and Outline. Before ADR 0015, each provider had its own route, handler registry and credential columns, and other modules imported provider classes.
@@ -124,3 +126,10 @@ Rule 6 required a lifecycle listener for every kind.
 No code dispatched its install, uninstall, scope and rename hooks, so each listener was an empty marker, and the provider adapters own these events.
 The listener SPI and the approval writer SPI are removed.
 Boot now requires a credential provider for every kind and the beans of each declared capability.
+
+## Update — 2026-11-27: `integration` holds `submission`
+
+[ADR 0165](0165-a-team-reviews-immutable-submitted-versions-within-its-own-scope.md) decision 13 adds work that a team submits itself.
+To the list in rule 1 it adds `submission`, and later one package for each capture tool.
+These packages have no provider connection.
+`IntegrationStructuralRulesTest#integrationTopLevelHasOnlyExpectedSubpackages` names them, and `PracticeReviewModuleBoundaryTest#shouldKeepDomainAndProviderTypesOutOfCoreProducts` keeps product modules from importing them.

@@ -77,6 +77,7 @@ Option 4.
    | A project change | A discretionary candidate. It is coalesced by person, scope and trigger family, and has a deadline and a maximum lateness. |
    | A timer | An occurrence with a stable key and a misfire rule. A restart records missed occurrences and sends no backlog. |
    | A task result | Work to close on the request that asked for it. Its result and its callback commit together. |
+   | A sealed review | An outcome to act on. It is never coalesced. The seal writes it for the reviewed account, with IDs only (ADR 0160). |
 
    Questions, approvals, safety changes and outcomes are never coalesced.
    A delivery receipt, a self-post or an acknowledgement never starts a second answer.

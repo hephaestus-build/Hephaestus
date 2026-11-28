@@ -15,9 +15,9 @@ import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.Nullable;
 
 /**
- * One stored provider delivery for one workspace, or for the installation when {@code workspaceId} is null. Only
- * {@link ProviderEventStore} writes it, through conditional statements on the database clock; the entity maps the
- * table for the schema check. {@code scope_key} names the workspace and the subject without its event token: at most
+ * One stored provider delivery for one workspace, or for the installation when {@code workspaceId} is null.
+ * {@link ProviderEventStore} and {@link ProviderEventIntake} write through the repository on the database clock.
+ * This entity maps the table for the schema check. {@code scope_key} names the workspace and the subject without its event token: at most
  * one event of a scope is leased at a time, and a scope's events are claimed in the order they arrived.
  */
 @Entity

@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewQueueJob;
@@ -43,7 +42,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ReviewRuntimeQueryAdapter implements ReviewRuntimeQuery {
     private final ReviewJobRepository jobs;
-    private final ReviewAssignmentQuery assignments;
     private final ReviewRuntimeRepository runtime;
     private final ReviewTimingFactsQuery timingFacts;
 
@@ -113,23 +111,13 @@ public class ReviewRuntimeQueryAdapter implements ReviewRuntimeQuery {
                 : jobs.findByWorkspaceIdAndStatusInOrderByAvailableAtAscIdAsc(
                         workspaceId, Set.of(ReviewJobStatus.QUEUED, ReviewJobStatus.RUNNING), Limit.of(headLimit));
         var head = queued.stream()
-                .map(job -> {
-                    var id = job.getId();
-                    var people = job.getInput().assignments().stream()
-                            .flatMap(assignmentId -> assignments.find(workspaceId, assignmentId).stream())
-                            .map(a -> a.developerId())
-                            .distinct()
-                            .toList();
-                    Long developer = people.size() == 1 ? people.getFirst() : null;
-                    return new ReviewQueueJob(
-                            id,
-                            job.getReviewId(),
-                            job.getInput().itemId(),
-                            developer,
-                            job.getStatus(),
-                            AgentRunHold.BUDGET.name().equals(job.getHoldReason()),
-                            job.getAvailableAt());
-                })
+                .map(job -> new ReviewQueueJob(
+                        job.getId(),
+                        job.getReviewId(),
+                        job.getInput().itemId(),
+                        job.getStatus(),
+                        AgentRunHold.BUDGET.name().equals(job.getHoldReason()),
+                        job.getAvailableAt()))
                 .toList();
         return new ReviewQueueSnapshot(
                 asOf,

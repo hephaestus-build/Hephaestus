@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <!--
+      A server of the previous release can end or delete a version while this runs. So each change set locks only one
+      existing table.
+    -->
+    <changeSet id="1795813200000-1" author="hephaestus">
+        <comment>The submitted content of a team item version, one row for each member of the version (ADR 0165). Nothing writes it yet.</comment>
+        <createTable tableName="team_snapshot">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="team_snapshotPK"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="snapshot_key" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="role" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="entry_route" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content" type="BYTEA">
+                <constraints nullable="false"/>
+            </column>
+            <column name="media_type" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content_sha256" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="normalized" type="BYTEA"/>
+            <column name="normalized_sha256" type="VARCHAR(64)"/>
+            <column name="normalizer_id" type="VARCHAR(64)"/>
+            <column name="normalizer_version" type="INTEGER"/>
+            <column name="normalized_by" type="VARCHAR(8)"/>
+            <column name="preview" type="BYTEA"/>
+            <column name="source_how" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_revision" type="JSONB"/>
+            <column name="live_link" type="TEXT"/>
+            <column name="limitations" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="team_snapshot" baseColumnNames="version_id,workspace_id" constraintName="sfk_team_snapshot_version" onDelete="CASCADE" referencedTableName="team_item_version" referencedColumnNames="id,workspace_id"/>
+        <addUniqueConstraint tableName="team_snapshot" columnNames="version_id, snapshot_key" constraintName="uk_team_snapshot_key"/>
+        <addUniqueConstraint tableName="team_snapshot" columnNames="id, workspace_id" constraintName="uk_team_snapshot_workspace"/>
+        <createIndex tableName="team_snapshot" indexName="idx_team_snapshot_version">
+            <column name="version_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
+        <sql>
+ALTER TABLE public.team_snapshot
+    ADD CONSTRAINT ck_team_snapshot_key CHECK (snapshot_key ~ '^[a-z0-9][a-z0-9_-]*$'),
+    ADD CONSTRAINT ck_team_snapshot_role CHECK (role IN ('MAIN', 'SUPPORTING')),
+    ADD CONSTRAINT ck_team_snapshot_entry_route CHECK (entry_route IN
+        ('PLUGIN_CAPTURE', 'EDITOR_CAPTURE', 'LINK_IMPORT', 'FILE_UPLOAD', 'PINNED_COMMIT')),
+    ADD CONSTRAINT ck_team_snapshot_source_how CHECK (source_how IN ('MEMBER_SUPPLIED', 'READ_AS_MEMBER')),
+    ADD CONSTRAINT ck_team_snapshot_normalized_by CHECK (normalized_by IN ('SERVER', 'CLIENT')),
+    ADD CONSTRAINT ck_team_snapshot_normalizer CHECK ((normalized_by IS NULL) = (normalizer_id IS NULL)
+        AND (normalizer_id IS NULL) = (normalizer_version IS NULL)),
+    ADD CONSTRAINT ck_team_snapshot_normalized CHECK (
+        (normalized IS NOT NULL) = (normalized_by IS NOT DISTINCT FROM 'SERVER')
+        AND (normalized IS NULL) = (normalized_sha256 IS NULL)
+        AND (normalized IS NULL OR normalized_sha256 = encode(sha256(normalized), 'hex'))),
+    ADD CONSTRAINT ck_team_snapshot_content CHECK (content_sha256 = encode(sha256(content), 'hex')),
+    ADD CONSTRAINT ck_team_snapshot_size CHECK (octet_length(content) &lt;= 10485760
+        AND coalesce(octet_length(normalized), 0) &lt;= 2097152 AND coalesce(octet_length(preview), 0) &lt;= 4194304),
+    ADD CONSTRAINT ck_team_snapshot_source_revision CHECK (source_revision IS NULL
+        OR (source_how = 'READ_AS_MEMBER' AND jsonb_typeof(source_revision) = 'object')),
+    ADD CONSTRAINT ck_team_snapshot_live_link CHECK (live_link IS NULL
+        OR (live_link LIKE 'https://%' AND char_length(live_link) &lt;= 2048)),
+    ADD CONSTRAINT ck_team_snapshot_limitations CHECK (jsonb_typeof(limitations) = 'array');
+        </sql>
+        <rollback>
+            <dropTable tableName="team_snapshot"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795813200000-2" author="hephaestus">
+        <comment>The rules of a snapshot, for every writer. Content arrives only with its version, never changes, leaves only when its version does, and only its live link can be removed.</comment>
+        <createProcedure>
+CREATE FUNCTION public.admit_team_snapshot() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM 1 FROM public.team_item_version v
+        WHERE v.id = NEW.version_id AND v.workspace_id = NEW.workspace_id AND v.state = 'AVAILABLE'
+        AND v.created_in_transaction = pg_current_xact_id()::text::bigint
+        FOR SHARE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'a snapshot arrives only with its new team item version' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END $$
+        </createProcedure>
+        <createProcedure>
+CREATE FUNCTION public.guard_team_snapshot() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF ROW(NEW.id, NEW.workspace_id, NEW.version_id, NEW.snapshot_key, NEW.role, NEW.entry_route, NEW.content,
+            NEW.media_type, NEW.content_sha256, NEW.normalized, NEW.normalized_sha256, NEW.normalizer_id,
+            NEW.normalizer_version, NEW.normalized_by, NEW.preview, NEW.source_how, NEW.source_revision,
+            NEW.limitations)
+        IS DISTINCT FROM ROW(OLD.id, OLD.workspace_id, OLD.version_id, OLD.snapshot_key, OLD.role, OLD.entry_route,
+            OLD.content, OLD.media_type, OLD.content_sha256, OLD.normalized, OLD.normalized_sha256,
+            OLD.normalizer_id, OLD.normalizer_version, OLD.normalized_by, OLD.preview, OLD.source_how,
+            OLD.source_revision, OLD.limitations)
+        OR (NEW.live_link IS NOT NULL AND NEW.live_link IS DISTINCT FROM OLD.live_link) THEN
+        RAISE EXCEPTION 'a snapshot never changes; only its live link can be removed' USING ERRCODE = '23514';
+    END IF;
+    RETURN NULL;
+END $$
+        </createProcedure>
+        <createProcedure>
+CREATE FUNCTION public.keep_team_snapshot_of_available_version() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    -- A version that is being deleted or has ended is no longer found as available.
+    PERFORM 1 FROM public.team_item_version v
+        WHERE v.id = OLD.version_id AND v.workspace_id = OLD.workspace_id AND v.state = 'AVAILABLE';
+    IF FOUND THEN
+        RAISE EXCEPTION 'a snapshot is deleted only with its version''s content' USING ERRCODE = '23514';
+    END IF;
+    RETURN NULL;
+END $$
+        </createProcedure>
+        <createProcedure>
+CREATE FUNCTION public.delete_ended_team_version_content() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    DELETE FROM public.team_snapshot s WHERE s.version_id = NEW.id AND s.workspace_id = NEW.workspace_id;
+    RETURN NULL;
+END $$
+        </createProcedure>
+        <sql>
+CREATE TRIGGER team_snapshot_admit BEFORE INSERT ON public.team_snapshot
+    FOR EACH ROW EXECUTE FUNCTION public.admit_team_snapshot();
+CREATE TRIGGER team_snapshot_guard AFTER UPDATE ON public.team_snapshot
+    FOR EACH ROW EXECUTE FUNCTION public.guard_team_snapshot();
+CREATE TRIGGER team_snapshot_kept AFTER DELETE ON public.team_snapshot
+    FOR EACH ROW EXECUTE FUNCTION public.keep_team_snapshot_of_available_version();
+        </sql>
+        <rollback>
+DROP TRIGGER team_snapshot_kept ON public.team_snapshot;
+DROP TRIGGER team_snapshot_guard ON public.team_snapshot;
+DROP TRIGGER team_snapshot_admit ON public.team_snapshot;
+DROP FUNCTION public.delete_ended_team_version_content();
+DROP FUNCTION public.keep_team_snapshot_of_available_version();
+DROP FUNCTION public.guard_team_snapshot();
+DROP FUNCTION public.admit_team_snapshot();
+        </rollback>
+    </changeSet>
+    <changeSet id="1795813200000-3" author="hephaestus">
+        <comment>A version that ends, by any writer, loses its content in the same transaction.</comment>
+        <sql>
+CREATE TRIGGER team_item_version_content AFTER UPDATE OF state ON public.team_item_version
+    FOR EACH ROW WHEN (NEW.state != 'AVAILABLE') EXECUTE FUNCTION public.delete_ended_team_version_content();
+        </sql>
+        <rollback>
+DROP TRIGGER team_item_version_content ON public.team_item_version;
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

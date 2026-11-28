@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.practices.feedback.page;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackGate;
@@ -76,27 +75,20 @@ public class PracticePageFeedbackService {
 
     @Transactional
     public List<PracticePageFeedbackDTO> getOwnPracticePageFeedback(long workspaceId) {
-        var view = UserViewContextHolder.get();
         var current = currentDeveloperLookup.currentDeveloperId();
-        if (view == null && current.isEmpty()) {
+        if (current.isEmpty()) {
             return List.of();
         }
-        long developerId = view == null ? current.orElseThrow() : view.accountId();
-        if (view != null && view.workspaceId() != workspaceId) {
+        long developerId = current.orElseThrow();
+        if (!privacy.holdForAccountWrite(developerId)) {
             return List.of();
         }
-        if (view == null && !privacy.holdForAccountWrite(developerId)) {
-            return List.of();
-        }
-        List<Feedback> feedback = feedbackRepository.findReadablePracticePage(workspaceId, List.of(developerId));
-        if (view == null) {
-            feedback = lockedAsTheyStand(workspaceId, feedback);
-        }
-        var readable = feedback;
+        var readable = lockedAsTheyStand(
+                workspaceId, feedbackRepository.findReadablePracticePage(workspaceId, List.of(developerId)));
         Instant now = clock.instant();
         // The gate and the page check the same evidence, so they share one read of its sources.
         var page = resultVisibility.asOneRead(
-                workspaceId, () -> page(workspaceId, eligibleReady(workspaceId, readable, view == null), now));
+                workspaceId, () -> page(workspaceId, eligibleReady(workspaceId, readable, true), now));
         var itemIds = page.stream()
                 .flatMap(card -> Stream.concat(
                         card.evidence().stream().map(Result::getItemId),
@@ -106,8 +98,7 @@ public class PracticePageFeedbackService {
         return page.stream()
                 .map(card -> {
                     Instant readAt = card.feedback().getDeliveredAt();
-                    if (view == null
-                            && !card.withdrawn()
+                    if (!card.withdrawn()
                             && card.feedback().getState() == FeedbackState.READY
                             && store.recordFirstRead(card.feedback(), developerId, now)) {
                         readAt = now;

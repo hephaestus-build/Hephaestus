@@ -1,13 +1,13 @@
 package de.tum.cit.aet.hephaestus.practices.review.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import de.tum.cit.aet.hephaestus.core.auth.dto.AccountRefDTO;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewFeedbackCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewVersionKind;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
@@ -34,9 +34,6 @@ public record ReviewSummaryDTO(
         ItemEventDTO startedBy,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
-        AccountRefDTO requestedBy,
-
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
         UUID batchId,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant orderedAt,
@@ -54,8 +51,23 @@ public record ReviewSummaryDTO(
         String model,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
-        ReviewProgressDTO progress) {
+        ReviewProgressDTO progress,
+
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
+        ReviewSetupRefDTO setup,
+
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) ReviewVersionKind versionKind,
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) ReviewAudienceDTO audience,
+
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
+        ReviewedVersionDTO reviewedVersion,
+
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) List<ReviewCoverageDTO> coverage,
+
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
+        ReviewChangeDTO change) {
     public ReviewSummaryDTO {
         practices = List.copyOf(practices);
+        coverage = List.copyOf(coverage);
     }
 }

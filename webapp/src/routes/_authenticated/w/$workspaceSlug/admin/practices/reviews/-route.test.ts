@@ -132,7 +132,10 @@ function heldScopedCount() {
 		"*/workspaces/:workspaceSlug/practices/reviews/results",
 		async ({ request }) => {
 			const url = new URL(request.url);
-			if (url.searchParams.get("size") !== "1" || url.searchParams.get("personId") !== "7") {
+			if (
+				url.searchParams.get("size") !== "1" ||
+				url.searchParams.get("practiceSlug") !== "testing"
+			) {
 				return;
 			}
 			asked = true;
@@ -166,14 +169,14 @@ describe("practice review routes", () => {
 	});
 
 	it.each([
-		["/results", `developerId=7&severity=${encodeURIComponent('["MAJOR"]')}`],
-		["/problems", `developerId=7&severity=${encodeURIComponent('["MAJOR"]')}`],
-		["/feedback", `developerId=7&location=GITHUB`],
-		["", `developerId=7&status=${encodeURIComponent('["FAILED"]')}`],
-		["/overview", "developerId=7"],
+		["/results", `&severity=${encodeURIComponent('["MAJOR"]')}`],
+		["/problems", `&severity=${encodeURIComponent('["MAJOR"]')}`],
+		["/feedback", "&location=GITHUB"],
+		["", `&status=${encodeURIComponent('["FAILED"]')}`],
+		["/overview", ""],
 	])('carries the scope from "%s" to every tab', async (fromPath, own) => {
 		const scope = `${SCOPE_QUERY}&practiceSlug=${encodeURIComponent('["thin-controllers"]')}&groupSlug=${encodeURIComponent('["design"]')}`;
-		renderRouteAtWithRouter(`${REVIEWS}${fromPath}?${scope}&${own}`);
+		renderRouteAtWithRouter(`${REVIEWS}${fromPath}?${scope}${own}`);
 
 		const navigation = await sectionNavigation();
 		// A list of one is written as its one value.
@@ -181,7 +184,6 @@ describe("practice review routes", () => {
 			...SCOPE,
 			practiceSlug: "thin-controllers",
 			groupSlug: "design",
-			developerId: "7",
 		};
 		for (const tab of ["Overview", "Reviews", "Observations", "Problems", "Feedback"]) {
 			expect(carriedSearch(sectionLink(navigation, tab))).toStrictEqual(expected);
@@ -247,7 +249,7 @@ describe("practice review page titles", () => {
 
 	/**
 	 * Each list tab says how many it holds under the shared scope, read as the total of a one-row page
-	 * of its own endpoint: the developer, practices, groups, dates and tracked record apply, a tab's own
+	 * of its own endpoint: the practices, groups, dates and tracked record apply, a tab's own
 	 * facets do not, and the overview has no count.
 	 */
 	it("counts each list tab under the shared scope, not under a tab's own facets", async () => {
@@ -259,7 +261,7 @@ describe("practice review page titles", () => {
 			countRead("/practices/reviews/feedback", 1951, counted),
 		);
 		renderRouteAtWithRouter(
-			`${REVIEWS}?developerId=7&groupSlug=${encodeURIComponent('["design"]')}&status=${encodeURIComponent('["FAILED"]')}`,
+			`${REVIEWS}?groupSlug=${encodeURIComponent('["design"]')}&status=${encodeURIComponent('["FAILED"]')}`,
 		);
 		const navigation = await sectionNavigation();
 		await within(navigation).findByRole(
@@ -273,12 +275,13 @@ describe("practice review page titles", () => {
 		within(navigation).getByRole("link", { name: "Overview", hidden: true });
 
 		const reviews = counted.find((url) => url.pathname.endsWith("/practices/reviews"));
-		expect(reviews?.searchParams.get("personId")).toBe("7");
 		expect(reviews?.searchParams.getAll("groupSlug").join(",")).toContain("design");
 		// The Reviews tab's own Status facet narrows its table, not its count.
 		expect(reviews?.searchParams.has("status")).toBe(false);
 		const feedback = counted.find((url) => url.pathname.endsWith("/feedback"));
-		expect(feedback?.searchParams.get("personId")).toBe("7");
+		expect(feedback?.searchParams.getAll("groupSlug").join(",")).toContain("design");
+		// A staff count never names a person (ADR 0125).
+		expect(counted.some((url) => url.searchParams.has("personId"))).toBe(false);
 	});
 
 	// Failed counts need their own retry; reloading the page must not be the only recovery.
@@ -295,7 +298,7 @@ describe("practice review page titles", () => {
 		expect(reads.count()).toBe(2);
 	});
 
-	/** A scope change must not attribute the previous total to a new person while its read is held. */
+	/** A scope change must not attribute the previous total to the new scope while its read is held. */
 	it("hides the previous scope's count until the new one is known", async () => {
 		const scoped = heldScopedCount();
 		server.use(scoped.handler, countRead("/practices/reviews/results", 13_308, []));
@@ -310,7 +313,7 @@ describe("practice review page titles", () => {
 			await router.navigate({
 				to: "/w/$workspaceSlug/admin/practices/reviews",
 				params: { workspaceSlug: "acme" },
-				search: { developerId: "7" },
+				search: { practiceSlug: ["testing"] },
 			});
 			await waitFor(() => expect(scoped.asked()).toBe(true));
 			expect(

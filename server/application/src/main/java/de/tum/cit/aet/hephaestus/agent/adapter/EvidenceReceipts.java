@@ -343,7 +343,7 @@ public class EvidenceReceipts {
                 """
                 SELECT DISTINCT p.type,p.server_url,s.provider_user_key,NULLIF(s.team_key,'')
                 FROM identity_restriction s JOIN identity_provider p ON p.id=s.provider_id
-                WHERE s.kind='ERASED' AND s.provider_user_key=ANY(?)
+                WHERE s.kind='ERASED' AND s.provider_user_key=ANY(?) AND p.type=ANY(?)
                 """,
                 (rs, row) -> new PersonCopyIdentity(
                         Objects.requireNonNull(rs.getString(1)), Objects.requireNonNull(rs.getString(2)),
@@ -353,7 +353,8 @@ public class EvidenceReceipts {
                         identities.stream()
                                 .map(PersonCopyIdentity::subject)
                                 .distinct()
-                                .toArray()));
+                                .toArray()),
+                new SqlArrayValue("text", PersonCopyIdentity.PROVIDER_TYPES.toArray()));
     }
 
     static boolean isSuppressed(List<PersonCopyIdentity> identities, List<PersonCopyIdentity> blocked) {

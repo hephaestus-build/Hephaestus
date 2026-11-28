@@ -110,6 +110,31 @@ interface ProviderEventRepository extends Repository<ProviderEventRow, Long> {
             """, nativeQuery = true)
     int store(@Param("event") NewEvent event);
 
+    interface ReceiptRow {
+        long getId();
+
+        Instant getReceivedAt();
+    }
+
+    boolean existsByWorkspaceIdAndProviderAndDeliveryKey(long workspaceId, String provider, String deliveryKey);
+
+    @Query(value = """
+            INSERT INTO provider_event
+              (workspace_id, provider, subject, scope_key, delivery_key, headers, payload, received_at, available_at,
+               state, attempt, failures, lease_epoch, ended_at)
+            VALUES (CAST(:#{#event.workspaceId()} AS bigint), :#{#event.provider()}, :#{#event.subject()},
+                    :#{#event.scopeKey()}, :#{#event.deliveryKey()}, CAST(:#{#event.headers()} AS jsonb),
+                    :#{#event.payload()}, clock_timestamp(), clock_timestamp(), 'DONE', 0, 0, 0, clock_timestamp())
+            ON CONFLICT (workspace_id, provider, delivery_key) DO NOTHING
+            RETURNING id, received_at AS "receivedAt"
+            """, nativeQuery = true)
+    Optional<ReceiptRow> storeHandled(@Param("event") NewEvent event);
+
+    /** Bounds implicit waits such as foreign keys and unique indexes for the caller's transaction. */
+    @WorkspaceAgnostic("Sets a bound of the current transaction; it reads no table")
+    @Query(value = "SELECT set_config('lock_timeout', :timeout, true)", nativeQuery = true)
+    String boundLocks(@Param("timeout") String timeout);
+
     /** {@code SET LOCAL statement_timeout}: the bound ends with the caller's transaction. */
     @WorkspaceAgnostic("Sets a bound of the current transaction; it reads no table")
     @Query(value = "SELECT set_config('statement_timeout', :timeout, true)", nativeQuery = true)

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.database;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonFeedbackAnswerRedaction;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.practices.adapter.PracticesPersonDataCatalog;
@@ -42,6 +43,7 @@ class ReviewOperationPrivacyDatabaseTest {
                 new NamedParameterJdbcTemplate(source),
                 JsonMapper.builder().build(),
                 mock(FeedbackCopyCleanupCustody.class),
+                mock(PersonFeedbackAnswerRedaction.class),
                 mock(PersonIdentityResolver.class),
                 mock(ScanReportService.class),
                 mock(AdviceRedaction.class));

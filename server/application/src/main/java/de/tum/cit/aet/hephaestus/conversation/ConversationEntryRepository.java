@@ -211,6 +211,16 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
     List<ShownLinkCall> findShownLinkCalls(
             @Param("workspaceId") Long workspaceId, @Param("turnIds") Collection<UUID> turnIds);
 
+    /** The answers of these turns that still hold words: a person erasure redacts them when a turn claimed feedback. */
+    @Query(value = """
+            SELECT e.id FROM conversation_entry e
+            WHERE e.workspace_id = :workspaceId AND e.turn_id IN (:turnIds) AND e.kind = 'ANSWER'
+              AND e.redacted_at IS NULL
+            ORDER BY e.id
+            """, nativeQuery = true)
+    List<UUID> findUnredactedAnswerIds(
+            @Param("workspaceId") Long workspaceId, @Param("turnIds") Collection<UUID> turnIds);
+
     /**
      * Whether each call of a tool that opens a source ended in an error, for these turns: the turn, the tool call id, the
      * tool and the error flag. Reads only these fields of the tool results, never their content.
@@ -316,6 +326,26 @@ public interface ConversationEntryRepository extends JpaRepository<ConversationE
             @Param("afterSeq") long afterSeq);
 
     Optional<ConversationEntry> findByWorkspaceIdAndRequestId(Long workspaceId, String requestId);
+
+    /** One message of a turn, as a support share renders it. */
+    record TurnMessage(UUID id, ConversationEntry.Kind kind, String text, Instant createdAt) {}
+
+    /**
+     * The person's question and Hephaestus's answers of one of their turns, in order, as the app shows them: never an
+     * erased or empty message, a tool result or a system entry.
+     */
+    @Query("""
+            SELECT new de.tum.cit.aet.hephaestus.conversation.ConversationEntryRepository$TurnMessage(
+                e.id, e.kind, e.text, e.createdAt)
+            FROM ConversationEntry e
+            WHERE e.workspaceId = :workspaceId AND e.accountId = :accountId AND e.turnId = :turnId
+              AND e.kind IN (de.tum.cit.aet.hephaestus.conversation.ConversationEntry.Kind.USER,
+                             de.tum.cit.aet.hephaestus.conversation.ConversationEntry.Kind.ANSWER)
+              AND e.redactedAt IS NULL AND e.text <> ''
+            ORDER BY e.seq
+            """)
+    List<TurnMessage> findTurnMessages(
+            @Param("workspaceId") long workspaceId, @Param("accountId") long accountId, @Param("turnId") UUID turnId);
 
     Optional<ConversationEntry> findByWorkspaceIdAndTurnIdAndKind(
             Long workspaceId, UUID turnId, ConversationEntry.Kind kind);

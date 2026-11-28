@@ -30,6 +30,7 @@
             "evidence",
             "practices::spi",
             "practices::weekly-digest",
+            "workspace::context",
             "workspace::spi",
         })
 @NullMarked

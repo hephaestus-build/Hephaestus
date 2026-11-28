@@ -6,7 +6,7 @@ import { precedes } from "@/test/dom";
 
 import { clearedScope } from "./review-scope";
 import { clearedReviewFacets, ReviewFilters } from "./ReviewFilters";
-import { STORY_GROUPS, STORY_PEOPLE, STORY_PRACTICES } from "./story-scope-sources";
+import { STORY_GROUPS, STORY_PRACTICES } from "./story-scope-sources";
 
 const meta = {
 	component: ReviewFilters,
@@ -19,7 +19,6 @@ const meta = {
 		onClearScope: fn(),
 		groups: STORY_GROUPS,
 		practices: STORY_PRACTICES,
-		people: STORY_PEOPLE,
 		total: 7,
 	},
 	render: (args) => (
@@ -177,16 +176,12 @@ export const ScopeCarriedFromAnotherTab: Story = {
 	args: {
 		search: {
 			status: undefined,
-			developerId: STORY_PEOPLE.options[0]?.accountId,
 			practiceSlug: [STORY_PRACTICES.options[0]?.value ?? ""],
 		},
 		total: 2,
 	},
 	play: async ({ canvas }) => {
 		canvas.getByText("2 reviews match your filters.");
-		await expect(canvas.getByRole("combobox", { name: /Developer/u })).toHaveTextContent(
-			STORY_PEOPLE.options[0]?.label ?? "",
-		);
 		await expect(canvas.queryByText("Not applied on this list")).not.toBeInTheDocument();
 	},
 };
@@ -204,7 +199,6 @@ export const SharedOrder: Story = {
 		const filters = canvas.getByRole("group", { name: "Filters" });
 		// The time order follows the date it orders by.
 		await expect(controlsOf(scope)).toStrictEqual([
-			"Developer",
 			"Group",
 			"Practice",
 			"Created",

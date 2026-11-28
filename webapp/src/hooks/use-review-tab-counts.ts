@@ -13,7 +13,7 @@ import {
 	resultsQuery,
 	reviewsQuery,
 } from "@/components/admin/practice-reviews/review-search";
-import { retryQuery, sessionRetriesQueries } from "@/runtime/tanstack-query/query-defaults";
+import { retryQuery } from "@/runtime/tanstack-query/query-defaults";
 
 /** One row is the smallest page the endpoints serve; only its total is read. */
 const COUNT_PAGE = 1;
@@ -23,12 +23,12 @@ const COUNT_REFRESH_MS = 60_000;
 
 /**
  * What every count read shares. Counts refresh quietly as reviews progress, including after a
- * failed read exhausts its retries. A user view repeats nothing, as every read of it is audited. A count of
- * another scope or workspace is never shown as this one's: until its own read answers, it shows nothing.
+ * failed read exhausts its retries. A count of another scope or workspace is never shown as this one's:
+ * until its own read answers, it shows nothing.
  */
 const COUNT_READ = {
 	retry: retryQuery,
-	refetchInterval: () => (sessionRetriesQueries() ? COUNT_REFRESH_MS : false),
+	refetchInterval: COUNT_REFRESH_MS,
 } as const;
 
 export function useReviewTabCounts(workspaceSlug: string, search: ReviewScopeSearch) {

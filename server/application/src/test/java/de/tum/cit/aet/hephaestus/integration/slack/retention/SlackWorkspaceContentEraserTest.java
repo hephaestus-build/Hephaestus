@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorWorkspaceErasure;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
@@ -54,6 +55,9 @@ class SlackWorkspaceContentEraserTest extends BaseUnitTest {
     @Mock
     private ProviderEventStore events;
 
+    @Mock
+    private MentorWorkspaceErasure mentorRows;
+
     @InjectMocks
     private SlackWorkspaceContentEraser eraser;
 
@@ -85,5 +89,7 @@ class SlackWorkspaceContentEraserTest extends BaseUnitTest {
         verify(conversationEntries).redactSlackEntries(42L);
         verify(conversationEntries).redactCopyingToolResults(42L, null);
         verify(conversations).clearSlackIdentities(42L);
+        // The mentor's intake rows of the workspace, of every account.
+        verify(mentorRows).eraseWorkspace(42L);
     }
 }

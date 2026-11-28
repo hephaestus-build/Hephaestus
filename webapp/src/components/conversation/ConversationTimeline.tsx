@@ -86,6 +86,8 @@ export type ThreadFocus = "composer" | "heading";
 export interface TimelineActions {
 	onVote: (entry: ConversationEntry, vote: MessageVote | null) => void;
 	onDelete: (entry: ConversationEntry) => void;
+	/** Opens the share of one question with support (ADR 0164). Absent where nothing can be shared. */
+	onShareWithSupport?: (turnId: string) => void;
 	onStop: (turnId: string) => void;
 	/** Removes a message that the server did not store from this device. */
 	onDiscardSend: (requestId: string) => void;

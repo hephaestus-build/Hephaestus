@@ -14,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { mock, test } from "node:test";
+import { setTimeout as startFixtureGuard } from "node:timers";
 import { Worker } from "node:worker_threads";
 
 import { isDiagnosticLine } from "../../../main/resources/agent/pi-diagnostics.ts";
@@ -330,6 +331,75 @@ if (scenario !== undefined && scenario !== "") {
 	let now = 1_000_000;
 	mock.method(Date, "now", () => now);
 	const record = (event: string) => appendFileSync(nodePath.join(cwd, "events"), `${event}\n`);
+	// Drive the same watchdog as the session-stall scenario, at the child program boundary.
+	if (scenario.startsWith("practice-program-")) {
+		const file = new URL(
+			"../../../main/resources/agent/work/practice-scripts/lib/core/script-run.ts",
+			import.meta.url,
+		);
+		const programs =
+			await import("../../../main/resources/agent/work/practice-scripts/lib/core/script-run.ts");
+		mock.module(file.href, {
+			exports: {
+				...programs,
+				forkedProgram(): ReturnType<typeof programs.forkedProgram> {
+					let connected = true;
+					let closed: (signal: string | null) => void;
+					let message: (value: unknown) => void;
+					let guard: ReturnType<typeof startFixtureGuard> | undefined;
+					const close = () => {
+						if (!connected) {
+							return;
+						}
+						connected = false;
+						clearTimeout(guard);
+						record("program:closed");
+						queueMicrotask(() => closed(null));
+					};
+					return {
+						get connected() {
+							return connected;
+						},
+						send(value) {
+							if (!isRecord(value)) {
+								return;
+							}
+							if (value.kind === "job") {
+								now += 301_000;
+								record("program:started");
+								queueMicrotask(() => {
+									message(JSON.stringify({ kind: "meta", meta: {} }));
+									message(JSON.stringify({ kind: "log", text: "sk-orchestration-secret" }));
+								});
+								// Bound the negative control when the watchdog cannot stop the host.
+								guard = startFixtureGuard(() => {
+									record("program:no-abort");
+									close();
+								}, 8000);
+								guard.unref();
+							}
+							if (value.kind === "abort") {
+								record("program:abort");
+							}
+							if (value.kind === "exit") {
+								close();
+							}
+						},
+						onMessage(listener) {
+							message = listener;
+						},
+						onClose(listener) {
+							closed = listener;
+						},
+						onOutput: () => undefined,
+						onError: () => undefined,
+						disconnect: close,
+						kill: close,
+					};
+				},
+			},
+		});
+	}
 	await mockChange({ writeChangeView: () => undefined });
 	if (scenario === "verification-git") {
 		const file = new URL("../../../main/resources/agent/pi-pinned-object.ts", import.meta.url);
@@ -1128,7 +1198,7 @@ if (scenario !== undefined && scenario !== "") {
 										});
 										await assert.rejects(tool("submit_result").execute("refused", {}));
 										record("answered-refusal");
-									} else if (mode === "stored-error") {
+									} else if (mode === "stored-error" || mode === "stored-stall") {
 										await tool("submit_result").execute(
 											"stored",
 											notMet("Submitted before the provider failed"),
@@ -2187,6 +2257,8 @@ if (scenario !== undefined && scenario !== "") {
 		"work-budget",
 		"cut-off",
 		"stall",
+		"practice-program-stall",
+		"practice-program-alone-stall",
 		"settle-safety",
 		"request-caps",
 		"provider-error",
@@ -2199,6 +2271,7 @@ if (scenario !== undefined && scenario !== "") {
 		"provider-reply-blank-error",
 		"provider-reply-abort-only",
 		"provider-reply-stored-error",
+		"provider-reply-stored-stall",
 		"batch",
 		"replacement-witness",
 		"comment-undecided",
@@ -2310,6 +2383,7 @@ if (scenario !== undefined && scenario !== "") {
 					"does not count blank text on a provider error as a received reply",
 				"provider-reply-abort-only": "does not count an empty abort as a received reply",
 				"provider-reply-stored-error": "admits a stored result despite a later provider error",
+				"provider-reply-stored-stall": "admits a stored result despite a later session stall",
 				"provider-error":
 					"a provider error the SDK does not retry is a failure of the provider, not a review that found nothing",
 				"argument-repairs":
@@ -2403,6 +2477,22 @@ if (scenario !== undefined && scenario !== "") {
 						writeFileSync(nodePath.join(cwd, "package.json"), '{"type":"module"}\n');
 						symlinkSync(LIB, nodePath.join(cwd, nodePath.dirname(PRACTICES_DIR), "lib"));
 						writeFileSync(nodePath.join(cwd, PRACTICES_DIR, "test-practice.ts"), LEADS_PROGRAM);
+					}
+					if (stage.startsWith("practice-program-")) {
+						writeFileSync(nodePath.join(cwd, "package.json"), '{"type":"module"}\n');
+						symlinkSync(LIB, nodePath.join(cwd, nodePath.dirname(PRACTICES_DIR), "lib"));
+						const quietProgram = `import { definePracticeScript } from "@hephaestus/practice-scripts";
+export default definePracticeScript({
+	meta: {},
+	async run() { return await new Promise(() => {}); },
+});`;
+						for (const slug of ["test-practice", "second-practice"]) {
+							writeFileSync(nodePath.join(cwd, PRACTICES_DIR, `${slug}.ts`), quietProgram);
+						}
+						writeFileSync(
+							nodePath.join(cwd, "catalog/practices/third-practice.md"),
+							"Third criterion.",
+						);
 					}
 					const verification = stage.startsWith("verification-");
 					if (stage === "tree-citation" || verification) {
@@ -2509,6 +2599,10 @@ if (scenario !== undefined && scenario !== "") {
 						stage === "draft-commit"
 					) {
 						index = [practice("test-practice"), practice("second-practice")];
+					} else if (stage === "practice-program-stall") {
+						index = ["test-practice", "second-practice", "third-practice"].map((slug) =>
+							practice(slug),
+						);
 					} else if (stage === "stall") {
 						index = [practice("test-practice"), practice("second-practice")];
 					} else if (stage === "comment-undecided") {
@@ -2574,6 +2668,8 @@ if (scenario !== undefined && scenario !== "") {
 						}),
 					);
 					const budgetMs = stage === "stall" || stage.endsWith("-stall") ? "3600000" : "60000";
+					const fixtureTimeout = stage.startsWith("practice-program-") ? 25_000 : undefined;
+					const verificationTimeout = verification ? 10_000 : undefined;
 					// The fixture's runner clock excludes the native SDK's startup time.
 					const child = spawnSync(
 						process.execPath,
@@ -2583,7 +2679,7 @@ if (scenario !== undefined && scenario !== "") {
 							import.meta.filename,
 						],
 						{
-							timeout: verification ? 10_000 : undefined,
+							timeout: fixtureTimeout ?? verificationTimeout,
 							env: {
 								...(stage.startsWith("scope-native-") ? { PATH: process.env.PATH } : process.env),
 								PI_ORCHESTRATION_SCENARIO: stage,
@@ -2614,7 +2710,7 @@ if (scenario !== undefined && scenario !== "") {
 							encoding: "utf8",
 						},
 					);
-					assert.equal(child.error, undefined);
+					assert.equal(child.error, undefined, child.stderr);
 					// A scenario's runtime lines are all ones the worker keeps, with no field left out, and never quote a
 					// tool, a provider or a model: some scenarios put the canary in a tool result and in provider errors.
 					assert.deepEqual(
@@ -3219,8 +3315,12 @@ if (scenario !== undefined && scenario !== "") {
 						case "provider-reply-partial-abort":
 						case "provider-reply-blank-error":
 						case "provider-reply-abort-only":
-						case "provider-reply-stored-error": {
-							const stored = stage === "provider-reply-stored-error";
+						case "provider-reply-stored-error":
+						case "provider-reply-stored-stall": {
+							const stored = stage.startsWith("provider-reply-stored-");
+							if (stage === "provider-reply-stored-stall") {
+								assert.match(child.stderr, /turn\.stopped .*stopped_by=stall step=prompt/u);
+							}
 							const unanswered = [
 								"provider-reply-unanswered-stall",
 								"provider-reply-blank-error",
@@ -3255,6 +3355,58 @@ if (scenario !== undefined && scenario !== "") {
 							assert.match(child.stderr, /review\.unreachable unanswered_calls=\d+/u);
 							reached({ "test-practice": "NOT_REACHED" });
 							ran({ "test-practice": "failed (unavailable)" });
+							break;
+						}
+						case "practice-program-alone-stall": {
+							// No model was called and nothing was staged. The server requeues exit 76 and ends the
+							// job failed, with no retry, on exit 1 (docs/contributor/agent-runs.mdx, The runner's exit).
+							assert.equal(child.status, 76, child.stderr);
+							assert.match(child.stderr, /review\.unreachable unanswered_calls=0 reason=stalled/u);
+							break;
+						}
+						case "practice-program-stall": {
+							assert.deepEqual(
+								events.filter((event) => event.startsWith("program:")),
+								[
+									"program:started",
+									"program:abort",
+									"program:closed",
+									"program:started",
+									"program:abort",
+									"program:closed",
+								],
+							);
+							assert.equal(child.status, 78, child.stderr);
+							assert.equal(
+								child.stderr.match(
+									/turn\.stopped .*stopped_by=stall step=practice_program program_step=run_child/gu,
+								)?.length,
+								2,
+							);
+							assert.equal(
+								child.stderr.match(/turn\.finished .*stopped_by=stall program_step=run_child/gu)
+									?.length,
+								2,
+							);
+							assert.equal(
+								child.stderr.match(/practice\.program_step .*program_step=drain_requests/gu)
+									?.length,
+								2,
+							);
+							assert.deepEqual(
+								[...candidatesIn(nodePath.join(cwd, "out/result.json")).keys()],
+								["third-practice"],
+							);
+							reached({
+								"test-practice": "NOT_REACHED",
+								"second-practice": "NOT_REACHED",
+								"third-practice": "EVALUATED",
+							});
+							ran({
+								"test-practice": "failed (unavailable)",
+								"second-practice": "failed (unavailable)",
+								"third-practice": "ok",
+							});
 							break;
 						}
 						case "stall": {

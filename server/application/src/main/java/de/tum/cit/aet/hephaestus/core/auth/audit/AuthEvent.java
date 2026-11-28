@@ -36,7 +36,7 @@ public class AuthEvent {
     @Nullable
     private Long accountId;
 
-    /** The SCM user a {@code USER_VIEW} disclosed, who may have no account. */
+    /** The SCM user an earlier {@code USER_VIEW} disclosed, who may have no account. View as user is removed. */
     @Column(name = "viewed_actor_id")
     @Nullable
     private Long viewedActorId;
@@ -99,6 +99,7 @@ public class AuthEvent {
     private boolean elevatedViaInstanceAdmin;
 
     public enum EventType {
+        /** A read through View as user, which ADR 0164 removed. Only earlier rows carry it. */
         USER_VIEW,
         LOGIN,
         PASSKEY_CHANGED,

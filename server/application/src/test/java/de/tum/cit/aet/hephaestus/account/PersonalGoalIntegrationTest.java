@@ -13,7 +13,6 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.OwnerScope;
-import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -120,7 +119,7 @@ class PersonalGoalIntegrationTest extends RealAuthIntegrationTest {
     }
 
     @Test
-    void shouldKeepTheGoalFromInstanceAdminAndUserView() {
+    void shouldKeepTheGoalFromAnInstanceAdmin() {
         long owner = signup();
         String ownerToken = token(owner);
         save(ownerToken, 0, WORDS).expectStatus().isOk().expectBody(Void.class);
@@ -134,9 +133,9 @@ class PersonalGoalIntegrationTest extends RealAuthIntegrationTest {
                 .uri(GOAL)
                 .headers(headers -> {
                     headers.setBearerAuth(adminToken);
-                    headers.set(UserViewContextHolder.WORKSPACE_HEADER, "test-project");
-                    headers.set(UserViewContextHolder.ACCOUNT_HEADER, Long.toString(owner));
-                    headers.set(UserViewContextHolder.REASON_HEADER, "Check the test account");
+                    // The headers of the removed View as user are refused (ADR 0164).
+                    headers.set("X-User-View-Workspace", "test-project");
+                    headers.set("X-User-View-Account", Long.toString(owner));
                 })
                 .exchange()
                 .expectStatus()

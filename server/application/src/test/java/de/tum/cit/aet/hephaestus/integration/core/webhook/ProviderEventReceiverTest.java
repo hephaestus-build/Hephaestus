@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockingDetails;
 import static org.mockito.Mockito.never;
@@ -23,6 +24,7 @@ import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderEventSubscriptions;
+import de.tum.cit.aet.hephaestus.integration.core.spi.VerifiedWebhookHandoff;
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineWebhookController;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -350,7 +352,32 @@ class ProviderEventReceiverTest extends BaseUnitTest {
         verify(store, never()).store(anyList());
     }
 
+    @Test
+    void shouldHandOffUnderTheLockedConnectionWithoutAlsoQueueingTheEvent() {
+        var kind = IntegrationKind.SLACK;
+        var config = config(kind);
+        candidate(kind, config, IntegrationState.ACTIVE);
+        var handoff = mock(VerifiedWebhookHandoff.class);
+        when(handoff.kind()).thenReturn(kind);
+        when(handoff.store(any(), any())).thenReturn(1);
+
+        int stored = receiver(List.of(handoff)).receive(kind, subject(kind), "delivery", headers(kind), BODY);
+
+        var arrival = ArgumentCaptor.forClass(ProviderEventStore.Arrival.class);
+        var ordered = inOrder(connections, handoff);
+        ordered.verify(connections).findAndLockLifecycleConnection(CONNECTION, WORKSPACE);
+        ordered.verify(handoff)
+                .store(eq(new VerifiedWebhookHandoff.LockedBinding(CONNECTION, "17", config)), arrival.capture());
+        assertThat(stored).isOne();
+        assertThat(arrival.getValue().payload()).isEqualTo(BODY);
+        verify(store).store(List.of());
+    }
+
     private ProviderEventReceiver receiver() {
+        return receiver(List.of());
+    }
+
+    private ProviderEventReceiver receiver(List<VerifiedWebhookHandoff> handoffs) {
         var manager = mock(PlatformTransactionManager.class);
         when(manager.getTransaction(any())).thenAnswer(ignored -> new SimpleTransactionStatus());
         var receiver = new ProviderEventReceiver(
@@ -359,7 +386,8 @@ class ProviderEventReceiverTest extends BaseUnitTest {
                 connections,
                 meters,
                 mock(EventTraceContext.class),
-                new TransactionTemplate(manager));
+                new TransactionTemplate(manager),
+                handoffs);
         ReflectionTestUtils.setField(receiver, "entityManager", entities);
         receivers.add(receiver);
         return receiver;

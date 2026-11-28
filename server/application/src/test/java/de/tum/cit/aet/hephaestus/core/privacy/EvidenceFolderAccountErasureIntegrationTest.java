@@ -1672,9 +1672,6 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 job.getId());
         assertThat(store.select(original)).isEqualTo(selected);
         assertThat(evidence.catalog().jobsContaining(original)).containsExactly(job.getId());
-        assertThatThrownBy(() -> personData.export(requestId))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("preview scope changed");
         assertThatThrownBy(() -> personData.requestErasure(requestId, administratorId, true))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("preview scope changed");

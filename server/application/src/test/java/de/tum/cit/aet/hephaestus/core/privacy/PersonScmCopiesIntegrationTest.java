@@ -158,7 +158,11 @@ class PersonScmCopiesIntegrationTest extends BaseIntegrationTest {
         long adminId = Objects.requireNonNull(administrator.getId());
         var preview = service.preview(
                 adminId, null, List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null)));
-        var export = service.export(preview.request().getId()).path("stores");
+        var export = PersonDataBundles.of(
+                        service,
+                        Objects.requireNonNull(transactions.getTransactionManager()),
+                        preview.request().getId())
+                .path("stores");
         assertThat(export.path("git_repository_history").size()).isEqualTo(1);
         assertThat(export.path("git_repository_history").get(0).path("id").asLong())
                 .isEqualTo(995601L);
@@ -291,7 +295,11 @@ class PersonScmCopiesIntegrationTest extends BaseIntegrationTest {
         });
 
         var preview = service.preview(adminId, null, List.of(new PersonIdentity(providerId, "42", null)));
-        var export = service.export(preview.request().getId()).path("stores");
+        var export = PersonDataBundles.of(
+                        service,
+                        Objects.requireNonNull(transactions.getTransactionManager()),
+                        preview.request().getId())
+                .path("stores");
         assertThat(export.path("git_commit"))
                 .singleElement()
                 .satisfies(row -> assertThat(row.path("signature_signer_login").asString())

@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataBundles;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest.State;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataService;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataStoreReceipt;
@@ -56,6 +57,9 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private PersonProcessingSuppression suppression;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @Autowired
     private WorkspaceRepository workspaces;
@@ -207,7 +211,8 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
         long administratorId =
                 Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
         var snapshot = personData.preview(administratorId, null, List.of(identity(provider, "42", null)));
-        var export = personData.export(snapshot.request().getId());
+        var export = PersonDataBundles.of(
+                personData, transactionManager, snapshot.request().getId());
         Set<String> exportedStores = new TreeSet<>();
         export.path("stores").propertyNames().forEach(exportedStores::add);
         Map<String, Long> counts =

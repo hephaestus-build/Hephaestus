@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import java.time.Clock;
-import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -24,22 +23,12 @@ class ReviewQueueService {
     private final ProductReferenceQuery references;
     private final Clock clock;
     private final ReviewProgressService progressService;
-    private final PerPersonResults perPerson;
 
     @Transactional(readOnly = true)
     public ReviewQueueDTO queue(long workspaceId) {
         var snapshot = runtime.queue(workspaceId, clock.instant(), HEAD_SIZE);
         var items = references.items(
                 workspaceId, snapshot.head().stream().map(job -> job.itemId()).toList());
-        // The queue names whose work waits only where admins see results per person: a review is of one person's work.
-        var developers = references.developers(
-                workspaceId,
-                perPerson.shown(workspaceId)
-                        ? snapshot.head().stream()
-                                .map(job -> job.developerId())
-                                .filter(Objects::nonNull)
-                                .toList()
-                        : List.of());
         var progress = progressService.progress(
                 workspaceId,
                 snapshot.head().stream()
@@ -56,7 +45,6 @@ class ReviewQueueService {
                         job.status(),
                         job.heldForBudget(),
                         Objects.requireNonNull(items.get(job.itemId())),
-                        job.developerId() == null ? null : developers.get(job.developerId()),
                         job.since(),
                         progress.get(job.reviewId())))
                 .toList();

@@ -1,6 +1,6 @@
 ---
 title: Intended purpose
-description: What Hephaestus is designed for, what it is not designed for, how views count people, and how a workspace owner decides whether admins see results per person.
+description: What Hephaestus is designed for, what it is not designed for, how views count people, and why no staff view names a person.
 page_type: reference
 ---
 
@@ -82,23 +82,21 @@ Until it ships, do not compare views over time or across these settings to learn
 
 Research exports keep their own rules. See [Research program](./research-program.mdx).
 
-## Per-person views for admins
+## No per-person views for staff
 
-The workspace setting **Per-person results for admins** controls what workspace admins see.
+Staff are instance admins, workspace admins and workspace owners.
+No staff view names the person of a practice result, a problem or a piece of feedback ([ADR 0164](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0164-staff-see-no-private-content-and-support-starts-with-the-person.md)).
 
-- For a new workspace, the setting is off.
-  Admins see results, problems and feedback on practice pages and in conversations with no names.
+- Admins see results, problems and feedback on practice pages and in conversations with no names.
   Each result still shows the work it is about, and the provider shows who wrote that work.
-  The Practice reviews lists have no **Developer** filter, and the server refuses a filter by person.
-- Feedback on the work always names its developer.
+  The Practice reviews lists have no filter by person.
+- Feedback on the work always names its developer, because the work names its developer.
   In Approve first mode, a workspace admin approves it before Hephaestus posts it.
-- Only a workspace owner can turn the setting on, after a confirmation.
-- Any workspace admin or owner can turn it off, in one step.
-- Hephaestus records each change in the configuration audit of the workspace, with the actor and the time.
+- Admins see the reason for a disagreement for 30 days, to correct the result. After that, they see only that a disagreement exists and when.
+- No staff route returns a person's conversation, Practice profile or private feedback. A person can share one conversation turn with one instance admin. [Instance administration](./instance-admin.mdx#support-shares) describes the share.
 
-A workspace that ran practice reviews before the setting existed keeps it on after the upgrade.
-The upgrade records one audit entry for each such workspace.
-To turn it off, follow [Choose whether admins see results per person](/user/workspace#choose-whether-admins-see-results-per-person).
+The workspace setting that showed workspace admins whom each result is about is removed.
+The upgrade records one configuration audit entry for each workspace that had it on.
 
 ## Related pages
 

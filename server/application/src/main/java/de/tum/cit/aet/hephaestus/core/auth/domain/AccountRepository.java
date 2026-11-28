@@ -5,6 +5,7 @@ import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -74,6 +75,14 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     List<Long> findActiveVerifiedAdministratorIds();
 
     @Query("""
+        SELECT a.id FROM Account a
+         WHERE a.appRole = de.tum.cit.aet.hephaestus.core.auth.domain.Account.AppRole.APP_ADMIN
+           AND a.status = de.tum.cit.aet.hephaestus.core.auth.domain.Account.Status.ACTIVE
+         ORDER BY a.id
+        """)
+    List<Long> findActiveAdministratorIds();
+
+    @Query("""
         SELECT a.primaryEmail FROM Account a
          WHERE a.id = :accountId
            AND a.appRole = de.tum.cit.aet.hephaestus.core.auth.domain.Account.AppRole.APP_ADMIN
@@ -124,6 +133,25 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
      */
     @Query(value = "SELECT status FROM account WHERE id = :id FOR SHARE", nativeQuery = true)
     Optional<String> lockStatusForShare(@Param("id") Long id);
+
+    /**
+     * The consent fields as the row holds them: a projection reads the columns, never an {@link Account} that the
+     * persistence context already holds.
+     */
+    @Query("""
+        SELECT a.status AS status, a.aiChoice AS aiChoice, a.feedbackDeliveryEnabled AS feedbackDeliveryEnabled
+        FROM Account a WHERE a.id = :id
+        """)
+    Optional<ConsentRow> findCommittedConsent(@Param("id") long id);
+
+    interface ConsentRow {
+        Account.Status getStatus();
+
+        @Nullable
+        AiChoice getAiChoice();
+
+        boolean getFeedbackDeliveryEnabled();
+    }
 
     /**
      * Status changes conflict with issuance share locks but allow audit foreign-key key-share locks.

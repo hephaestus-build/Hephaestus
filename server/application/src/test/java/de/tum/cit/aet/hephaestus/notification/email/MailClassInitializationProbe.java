@@ -38,8 +38,7 @@ final class MailClassInitializationProbe {
                     .withThreshold(Duration.ZERO)
                     .withStackTrace();
             events.onEvent("jdk.VirtualThreadPinned", event -> {
-                if (!PinnedParks.onJdkSubPoller(event.getStackTrace()))
-                    pinned.add(String.valueOf(event.getStackTrace()));
+                if (!PinnedParks.ownedByJdk(event.getStackTrace())) pinned.add(String.valueOf(event.getStackTrace()));
             });
             events.startAsync();
             together(MailClassInitializationProbe::deliver);

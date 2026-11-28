@@ -99,7 +99,6 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 defaults.oauthAuthorization(),
                 defaults.refresh(),
                 defaults.clientSession(),
-                defaults.userView(),
                 defaults.deleteUser(),
                 defaults.export(),
                 defaults.conversationTurns(),
@@ -171,7 +170,6 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 oauthAuthorization,
                 new AuthRateLimitProperties.Limit(60, Duration.ofMinutes(1)),
                 clientSession,
-                new AuthRateLimitProperties.Limit(10, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(3, Duration.ofHours(1)),
                 new AuthRateLimitProperties.Limit(10, Duration.ofHours(1)),
                 new AuthRateLimitProperties.Limit(20, Duration.ofMinutes(10)),
@@ -216,7 +214,6 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
     void disabledFilterPassesThroughWithoutTouchingBuckets() throws Exception {
         AuthRateLimitProperties disabled = new AuthRateLimitProperties(
                 false,
-                new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)),
@@ -464,28 +461,6 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldKeyEveryUserViewReadOnTheOperatorWhenTheyBrowseSeveralUsersAndWorkspaces() throws Exception {
-        authenticateAs("99");
-        AuthRateLimitFilter f = filter(props());
-
-        f.doFilter(
-                new MockHttpServletRequest("GET", "/api/workspaces/example/user-view/users/1"),
-                new MockHttpServletResponse(),
-                mock(FilterChain.class));
-        MockHttpServletRequest activity =
-                new MockHttpServletRequest("GET", "/api/workspaces/example/activity/members/alex/open-work");
-        activity.addHeader("X-User-View-Account", "1");
-        f.doFilter(activity, new MockHttpServletResponse(), mock(FilterChain.class));
-        MockHttpServletRequest conversation = new MockHttpServletRequest("GET", "/api/workspaces/other/conversation");
-        conversation.addHeader("X-User-View-Account", "2");
-        f.doFilter(conversation, new MockHttpServletResponse(), mock(FilterChain.class));
-        f.doFilter(
-                new MockHttpServletRequest("GET", "/api/user"), new MockHttpServletResponse(), mock(FilterChain.class));
-
-        assertThat(store).containsOnlyKeys("user-view:acct:99");
-    }
-
-    @Test
     void deleteUserUsesThreePerHourBudgetKeyedByAccount() throws Exception {
         authenticateAs("7");
         // use the spec default (3/hour) — exhaust then assert 429
@@ -604,25 +579,6 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         FilterChain chain = mock(FilterChain.class);
 
         f.doFilter(request, response, chain);
-
-        verify(chain, never()).doFilter(request, response);
-        assertThat(response.getStatus()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE.value());
-    }
-
-    @Test
-    void viewedReadFailsClosedWhenBucketBackendThrows() throws Exception {
-        authenticateAs("42");
-        BucketResolver throwing = (key, config) -> {
-            throw new RuntimeException("bucket store down");
-        };
-        AuthRateLimitFilter filter = new AuthRateLimitFilter(props(), throwing, objectMapper, metrics);
-        MockHttpServletRequest request =
-                new MockHttpServletRequest("GET", "/api/workspaces/demo/activity/members/alex/open-work");
-        request.addHeader("X-User-View-Account", "7");
-        MockHttpServletResponse response = new MockHttpServletResponse();
-        FilterChain chain = mock(FilterChain.class);
-
-        filter.doFilter(request, response, chain);
 
         verify(chain, never()).doFilter(request, response);
         assertThat(response.getStatus()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE.value());

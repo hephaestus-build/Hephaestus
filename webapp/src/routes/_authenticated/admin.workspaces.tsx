@@ -94,13 +94,6 @@ function AdminWorkspacesPage() {
 				loadFailure={failed ? failure : undefined}
 				refreshFailure={retained ? failure : undefined}
 				hasSearch={term.length > 0}
-				onViewAsUser={(workspace) => {
-					void navigate({
-						to: "/w/$workspaceSlug/view-as",
-						params: { workspaceSlug: workspace.workspaceSlug },
-						search: {},
-					});
-				}}
 			/>
 		</PageLayout>
 	);

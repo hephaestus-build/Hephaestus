@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.core.database.PracticeMigrationFixture;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonEvidenceErasure;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonFeedbackAnswerRedaction;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.practices.adapter.PracticesPersonDataCatalog;
@@ -71,6 +72,7 @@ class AgentPersonDataCatalogDatabaseTest {
                 jdbc,
                 mapper,
                 mock(FeedbackCopyCleanupCustody.class),
+                mock(PersonFeedbackAnswerRedaction.class),
                 mock(PersonIdentityResolver.class),
                 mock(ScanReportService.class),
                 mock(AdviceRedaction.class));

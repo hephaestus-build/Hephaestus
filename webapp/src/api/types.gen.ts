@@ -2070,11 +2070,11 @@ export type FeedbackAccountRef = {
 };
 
 /**
- * A developer's answer to feedback: the resolution, and the explanation only for a disagreement
+ * A developer's answer to feedback: the resolution, and the explanation only for a disagreement that the developer gave in the last 30 days
  */
 export type FeedbackAnswer = {
 	/**
-	 * Only for a disagreement
+	 * Only for a disagreement, and only for 30 days after the developer gave it
 	 */
 	comment: string | null;
 	createdAt: Date;
@@ -2186,8 +2186,14 @@ export type FeedbackDecisionReason =
  */
 export type FeedbackDestination = string;
 
+/**
+ * A developer's current disagreement with feedback, as a workspace admin reads it on a result.
+ */
 export type FeedbackDisagreement = {
-	comment: string;
+	/**
+	 * The developer's explanation, only for 30 days after they gave it (ADR 0125)
+	 */
+	comment: string | null;
 	destination: FeedbackDestination;
 	feedbackId: string;
 	respondedAt: Date;
@@ -3487,7 +3493,7 @@ export type LlmUsageByJobType = {
 	unpricedEventCount: number;
 };
 
-export type LoginProviderProviderType = "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
+export type LoginProviderProviderType = "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE" | "OIDC";
 
 /**
  * Admin view of a login provider. The client secret is never included.
@@ -4069,29 +4075,6 @@ export type OffsetPageDtoSyncJob = {
 /**
  * One numbered page of a list
  */
-export type OffsetPageDtoUserViewAccount = {
-	content: Array<UserViewAccount>;
-	/**
-	 * This page's number, from 0
-	 */
-	page: number;
-	/**
-	 * The most rows a page holds
-	 */
-	size: number;
-	/**
-	 * Rows in the whole list
-	 */
-	totalElements: number;
-	/**
-	 * Pages in the whole list
-	 */
-	totalPages: number;
-};
-
-/**
- * One numbered page of a list
- */
 export type OffsetPageDtoWorkspaceMembership = {
 	content: Array<WorkspaceMembership>;
 	/**
@@ -4356,17 +4339,6 @@ export type PasskeyStatus = {
 	recoveryRequired: boolean;
 	verified: boolean;
 	workspaceAdminRequired: boolean;
-};
-
-export type PerPersonResults = {
-	/**
-	 * Whether the caller may turn it on: only a workspace owner may
-	 */
-	canTurnOn: boolean;
-	/**
-	 * Whether workspace admins see practice results per person
-	 */
-	enabled: boolean;
 };
 
 export type PersonDataProvider = {
@@ -4662,6 +4634,8 @@ export type PracticeItemTypeOption = {
 	scanItemKinds: Array<string>;
 	scanSupported: boolean;
 };
+
+export type PracticeLevel = "ITEM" | "MEMBER";
 
 export type PracticePageCleanWork = {
 	item: ItemRef;
@@ -5833,6 +5807,15 @@ export type ReplaceOutlineTokenRequest = {
 };
 
 /**
+ * A repository at the commit that the review pinned on its monitored default branch.
+ */
+export type RepositoryCommitVersion = {
+	commit: string;
+	kind: "REPOSITORY_COMMIT";
+	ref: string;
+};
+
+/**
  * Information about a git repository
  */
 export type RepositoryInfo = {
@@ -6053,12 +6036,21 @@ export type Review = {
 	origin: ReviewOrigin;
 	practices: Array<ReviewPractice>;
 	progress: ReviewProgress | null;
-	requestedBy: AccountRef | null;
 	results: ReviewResultCounts;
 	startedBy: ItemEvent | null;
 	status: ReviewStatus;
 	stopReason: ReviewStopReason | null;
 };
+
+/**
+ * Who reads a review. A team review names its team project; no other audience names one.
+ */
+export type ReviewAudience = {
+	kind: ReviewAudienceKind;
+	teamProjectId: string | null;
+};
+
+export type ReviewAudienceKind = "OPERATIONAL" | "TEAM" | "PERSONAL";
 
 export type ReviewBatch = {
 	budgetUsd: string | null;
@@ -6119,7 +6111,6 @@ export type ReviewBoundResult = {
 	id: string;
 	item: ItemRef;
 	outcome: ResultOutcome;
-	person: ReviewPerson | null;
 	practiceName: string;
 	practiceSlug: string;
 	recordedAt: Date;
@@ -6141,6 +6132,18 @@ export type ReviewBucket = {
 
 export type ReviewCadence = "DAILY" | "WEEKLY";
 
+/**
+ * How a review differs from its baseline, the newest earlier closed review of the same setup and item (ADR 0167
+ * decision 6). The three sides are independent: one commit with other pinned evidence is the same version with changed
+ * evidence. Only the evidence can be unknown; the constructor refuses an unknown version or setup.
+ */
+export type ReviewChange = {
+	baselineReviewId: string;
+	evidence: ReviewDifference;
+	setup: ReviewDifference;
+	version: ReviewDifference;
+};
+
 export type ReviewContext = {
 	canInspectReviewDetails: boolean;
 	item?: ItemRef;
@@ -6150,13 +6153,25 @@ export type ReviewContext = {
 	workspaceSlug: string;
 };
 
+/**
+ * The planned pairs of the practices of one level, by what became of them. A review never sums two levels.
+ */
+export type ReviewCoverage = {
+	counts: ReviewItemCounts;
+	level: PracticeLevel;
+};
+
 export type ReviewDecision = "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED";
 
 export type ReviewDetail = {
 	activeJobCount: number;
+	audience: ReviewAudience;
 	batchId: string | null;
+	change: ReviewChange | null;
 	completedAt: Date | null;
+	coverage: Array<ReviewCoverage>;
 	createdAt: Date;
+	evidence: Array<ReviewEvidence>;
 	feedback: ReviewFeedbackCounts;
 	generatedPaths: GeneratedPathReview | null;
 	id: string;
@@ -6169,14 +6184,36 @@ export type ReviewDetail = {
 	origin: ReviewOrigin;
 	practices: Array<ReviewPractice>;
 	progress: ReviewProgress | null;
-	requestedBy: AccountRef | null;
 	results: ReviewResultCounts;
+	reviewedVersion: ReviewedVersion | null;
 	runtime: ReviewRuntime | null;
+	setup: ReviewSetupRef | null;
 	startedBy: ItemEvent | null;
 	status: ReviewStatus;
 	stopReason: ReviewStopReason | null;
 	usage: ReviewUsage;
+	versionKind: ReviewVersionKind;
 };
+
+/**
+ * Whether one side of a review differs from its baseline. Only the evidence can be unknown.
+ */
+export type ReviewDifference = "SAME" | "CHANGED" | "UNKNOWN";
+
+/**
+ * One source of evidence from outside the reviewed version, pinned when the review was created, such as the CI runs of
+ * a commit. Its slot names the source, for example <code>ci.observed</code>.
+ */
+export type ReviewEvidence = {
+	readAt: Date | null;
+	slot: string;
+	state: ReviewEvidenceState;
+};
+
+/**
+ * What the server read for one evidence source when it created the review. A missing or incomplete source leaves its criteria Could not determine.
+ */
+export type ReviewEvidenceState = "PRESENT" | "INCOMPLETE" | "MISSING";
 
 export type ReviewFeedback = {
 	bodyPreview: string | null;
@@ -6190,7 +6227,7 @@ export type ReviewFeedback = {
 	item: ItemRef | null;
 	location: FeedbackLocation;
 	/**
-	 * Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off
+	 * The developer of feedback on the work, which names them as the work does. Null for feedback on a practice page or in a conversation (ADR 0125)
 	 */
 	person: ReviewPerson | null;
 	replacesId: string | null;
@@ -6236,7 +6273,7 @@ export type ReviewFeedbackDetail = {
 	item: ItemRef | null;
 	location: FeedbackLocation;
 	/**
-	 * Null for feedback on a practice page or in a conversation while the workspace has per-person results for admins off
+	 * The developer of feedback on the work, which names them as the work does. Null for feedback on a practice page or in a conversation (ADR 0125)
 	 */
 	person: ReviewPerson | null;
 	replacesId: string | null;
@@ -6252,6 +6289,10 @@ export type ReviewFeedbackDetail = {
 
 export type ReviewFeedbackSort = "NEWEST" | "OLDEST";
 
+/**
+ * The planned pairs of one practice, or of one practice level, by what became of them. Each planned pair is reviewed,
+ * withheld or not reviewed. A reused pair is reviewed too, so <code>reused</code> is a part of <code>reviewed</code>.
+ */
 export type ReviewItemCounts = {
 	listed: number;
 	notReviewed: number;
@@ -6365,6 +6406,7 @@ export type ReviewPractice = {
 	 */
 	editedIn: PracticeEditedIn;
 	itemCounts: ReviewItemCounts;
+	level: PracticeLevel;
 	number: null | number;
 	practiceName: string;
 	practiceSlug: string;
@@ -6401,7 +6443,6 @@ export type ReviewProblem = {
 	item: ItemRef;
 	markedIncorrectAt: Date | null;
 	path: string | null;
-	person: ReviewPerson | null;
 	practiceName: string;
 	practiceSlug: string;
 	recordedAt: Date;
@@ -6433,7 +6474,6 @@ export type ReviewProblemDetail = {
 	item: ItemRef;
 	markedIncorrectAt: Date | null;
 	path: string | null;
-	person: ReviewPerson | null;
 	practiceName: string;
 	practiceSlug: string;
 	problem: Problem;
@@ -6453,7 +6493,7 @@ export type ReviewProblemDetail = {
 };
 
 /**
- * How far an active item review got; absent for a scan, which lists its items in pages
+ * How far an item review got; absent for a scan, which lists its items in pages
  */
 export type ReviewProgress = {
 	/**
@@ -6468,6 +6508,7 @@ export type ReviewProgress = {
 	 * Practices that the review's attempts work on. A practice decided before the first attempt, such as one withheld for readiness, is not counted.
 	 */
 	practicesTotal: number;
+	stage: ReviewStage;
 };
 
 export type ReviewQueue = {
@@ -6486,7 +6527,6 @@ export type ReviewQueueItem = {
 	heldForBudget: boolean;
 	item: ItemRef;
 	jobId: string;
-	person: ReviewPerson | null;
 	progress: ReviewProgress | null;
 	reviewId: string;
 	since: Date;
@@ -6547,7 +6587,6 @@ export type ReviewResult = {
 	markedIncorrectAt: Date | null;
 	origin: ReviewOrigin;
 	outcome: ResultOutcome;
-	person: ReviewPerson | null;
 	practiceName: string;
 	practiceSlug: string;
 	problemCount: number;
@@ -6593,7 +6632,6 @@ export type ReviewResultDetail = {
 	marks: Array<ResultMark>;
 	origin: ReviewOrigin;
 	outcome: ResultOutcome;
-	person: ReviewPerson | null;
 	practiceName: string;
 	practiceSlug: string;
 	practiceVersionId: string | null;
@@ -6624,6 +6662,7 @@ export type ReviewSchedule = {
 	lastRunAt: Date | null;
 	lookbackDays: null | number;
 	nextRunAt: Date;
+	setupId: string | null;
 	updatedAt: Date;
 	version: string;
 };
@@ -6642,6 +6681,28 @@ export type ReviewScopeRepository = {
 	baseBranches: Array<string>;
 	repositoryItemId: string;
 };
+
+/**
+ * The review setup that started a review, as the review keeps a copy of it (ADR 0165 decision 10).
+ */
+export type ReviewSetupRef = {
+	id: string;
+	name: string;
+};
+
+/**
+ * The one state a status display shows for an item review. It follows from stored states only: it estimates no share of the work and no remaining time, and it carries no observation.
+ */
+export type ReviewStage =
+	| "QUEUED"
+	| "CONTINUING"
+	| "CHECKING"
+	| "OBSERVATIONS_READY"
+	| "READY"
+	| "PARTLY_CHECKED"
+	| "WITHHELD"
+	| "FAILED"
+	| "STOPPED";
 
 /**
  * Extensible enum: a client accepts a value that the examples do not name. Where the review stands.
@@ -6664,8 +6725,11 @@ export type ReviewStopReason = string;
 
 export type ReviewSummary = {
 	activeJobCount: number;
+	audience: ReviewAudience;
 	batchId: string | null;
+	change: ReviewChange | null;
 	completedAt: Date | null;
+	coverage: Array<ReviewCoverage>;
 	createdAt: Date;
 	feedback: ReviewFeedbackCounts;
 	id: string;
@@ -6678,11 +6742,13 @@ export type ReviewSummary = {
 	origin: ReviewOrigin;
 	practices: Array<ReviewPractice>;
 	progress: ReviewProgress | null;
-	requestedBy: AccountRef | null;
 	results: ReviewResultCounts;
+	reviewedVersion: ReviewedVersion | null;
+	setup: ReviewSetupRef | null;
 	startedBy: ItemEvent | null;
 	status: ReviewStatus;
 	stopReason: ReviewStopReason | null;
+	versionKind: ReviewVersionKind;
 };
 
 export type ReviewTimeShares = {
@@ -6749,6 +6815,8 @@ export type ReviewUsageAttempt = {
 	reasoningTokens: number;
 };
 
+export type ReviewVersionKind = "REPOSITORY_COMMIT" | "SUBMITTED_VERSION" | "ITEM_REVISION";
+
 export type ReviewedBy = {
 	by: ReviewedByKind;
 	humanReason: ReviewLimit | null;
@@ -6769,6 +6837,10 @@ export type ReviewedPractice = {
 	slug: string;
 	whatGoodLooksLike: string | null;
 	whyItMatters: string | null;
+};
+
+export type ReviewedVersion = (RepositoryCommitVersion | SubmittedVersion) & {
+	kind: string;
 };
 
 /**
@@ -7257,6 +7329,160 @@ export type StateDimension = {
 	label: string;
 	name: string;
 	values: Array<Value>;
+};
+
+/**
+ * The immutable version of a team item that the review pinned (ADR 0165), with its number in that item.
+ */
+export type SubmittedVersion = {
+	kind: "SUBMITTED_VERSION";
+	number: number;
+	versionId: string;
+};
+
+/**
+ * A share as the person who made it sees it: to whom, until when, and how often it was read.
+ */
+export type SupportShare = {
+	createdAt: Date;
+	expiresAt: Date;
+	id: string;
+	includesText: boolean;
+	lastReadAt?: Date;
+	readCount: number;
+	recipient: SupportShareRecipient;
+	revokedAt?: Date;
+	state: SupportShareState;
+	turnId: string;
+	/**
+	 * The slug of the workspace of the shared turn
+	 */
+	workspaceSlug: string;
+};
+
+/**
+ * One message of a shared turn, exactly as the person saw it when they shared it.
+ */
+export type SupportShareMessage = {
+	/**
+	 * QUESTION: the person wrote it. ANSWER: Hephaestus wrote it.
+	 */
+	author: SupportShareMessageAuthor;
+	createdAt: Date;
+	entryId: string;
+	text: string;
+};
+
+export type SupportShareMessageAuthor = "QUESTION" | "ANSWER";
+
+/**
+ * Exactly what the recipient will read, before the person shares it.
+ */
+export type SupportSharePreview = {
+	/**
+	 * The messages that the share shows. Empty when the person shares only diagnostics.
+	 */
+	messages: Array<SupportShareMessage>;
+	/**
+	 * The instance admins who can receive the share
+	 */
+	recipients: Array<SupportShareRecipient>;
+	/**
+	 * Confirms these exact messages when the person shares. Absent without messages.
+	 */
+	textDigest?: string;
+	turn: SupportShareTurn;
+	/**
+	 * How many days the recipient can read the share
+	 */
+	validForDays: number;
+};
+
+export type SupportSharePreviewRequest = {
+	/**
+	 * Whether the share shows the turn's messages, or only its diagnostics
+	 */
+	includeText: boolean;
+};
+
+/**
+ * A share as its recipient reads it. The person chose to show their name and this turn; the share shows nothing
+ * else about them.
+ */
+export type SupportShareReceived = {
+	createdAt: Date;
+	expiresAt: Date;
+	id: string;
+	includesText: boolean;
+	/**
+	 * The shared messages. Empty in the list, without text, or when the text is withheld.
+	 */
+	messages: Array<SupportShareMessage>;
+	/**
+	 * The person who shared the turn
+	 */
+	sharedBy: string;
+	/**
+	 * True when the person shared text that was deleted or changed since. The share then shows no text.
+	 */
+	textWithheld: boolean;
+	/**
+	 * The turn's diagnostics. Absent in the list, and when the turn no longer exists.
+	 */
+	turn?: SupportShareTurn;
+	workspaceSlug: string;
+};
+
+/**
+ * An instance admin who can receive a support share.
+ */
+export type SupportShareRecipient = {
+	accountId: string;
+	displayName: string;
+};
+
+export type SupportShareRequest = {
+	includeText: boolean;
+	/**
+	 * The instance admin who can read the share
+	 */
+	recipientAccountId: string;
+	/**
+	 * The preview's text digest; required when the share includes text
+	 */
+	textDigest?: string;
+};
+
+export type SupportShareState = "ACTIVE" | "EXPIRED" | "REVOKED";
+
+/**
+ * The diagnostics of one conversation turn. It holds no text.
+ */
+export type SupportShareTurn = {
+	attempt: number;
+	/**
+	 * The kind of the last model call that failed, as the LLM proxy names it
+	 */
+	failedCall?: string;
+	/**
+	 * The status that the provider answered the failed call with
+	 */
+	failedCallStatus?: number;
+	/**
+	 * Why the turn failed, as a closed kind. Absent unless the turn failed.
+	 */
+	failureReason?: ConversationTurnFailureReason;
+	finishedAt?: Date;
+	queuedAt: Date;
+	/**
+	 * The run that executed the turn: the key of its server logs
+	 */
+	runId: string;
+	startedAt?: Date;
+	status: ConversationTurnStatus;
+	surface: ConversationTurnSurface;
+	turnId: string;
+	workspaceSlug: string;
 };
 
 /**
@@ -7875,10 +8101,6 @@ export type UpdateOutlineCollectionStateRequest = {
 	state: OutlineCollectionMirrorState;
 };
 
-export type UpdatePerPersonResults = {
-	enabled: boolean;
-};
-
 export type UpdatePracticeGroupRequest = {
 	color: string | null;
 	description: string | null;
@@ -8221,12 +8443,6 @@ export type UserTeams = {
 	name: string;
 	teams: Array<TeamSummary>;
 	url: string;
-};
-
-export type UserViewAccount = {
-	account: AccountRef;
-	accountId: string;
-	providerLogin: string | null;
 };
 
 export type Value = {
@@ -8624,10 +8840,6 @@ export type WorkspaceListItem = {
 	 * Hosts that a link in model-written text may point to in this workspace: Hephaestus and the workspace's providers. A host that starts with a dot also allows its subdomains. Any other link shows as text.
 	 */
 	linkHosts: Array<string>;
-	/**
-	 * Whether workspace admins see practice results per person. Every member reads it, because it decides who sees their results.
-	 */
-	perPersonResultsForAdmins?: boolean;
 	/**
 	 * Whether practice reviews are on
 	 */
@@ -10768,39 +10980,6 @@ export type AdminErasePersonDataResponses = {
 export type AdminErasePersonDataResponse =
 	AdminErasePersonDataResponses[keyof AdminErasePersonDataResponses];
 
-export type AdminExportPersonDataData = {
-	body?: never;
-	path: {
-		id: string;
-	};
-	query?: never;
-	url: "/admin/person-data/{id}/export";
-};
-
-export type AdminExportPersonDataErrors = {
-	/**
-	 * A problem. Its type names the kind.
-	 */
-	"4XX": ProblemDetail;
-	/**
-	 * A problem. Its type names the kind.
-	 */
-	"5XX": ProblemDetail;
-};
-
-export type AdminExportPersonDataError =
-	AdminExportPersonDataErrors[keyof AdminExportPersonDataErrors];
-
-export type AdminExportPersonDataResponses = {
-	/**
-	 * JSON file
-	 */
-	200: Blob | File;
-};
-
-export type AdminExportPersonDataResponse =
-	AdminExportPersonDataResponses[keyof AdminExportPersonDataResponses];
-
 export type GetInstanceCatalogData = {
 	body?: never;
 	path?: never;
@@ -12221,6 +12400,68 @@ export type AdminUpdateSilentModeResponses = {
 
 export type AdminUpdateSilentModeResponse =
 	AdminUpdateSilentModeResponses[keyof AdminUpdateSilentModeResponses];
+
+export type ListReceivedSupportSharesData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/admin/support-shares";
+};
+
+export type ListReceivedSupportSharesErrors = {
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type ListReceivedSupportSharesError =
+	ListReceivedSupportSharesErrors[keyof ListReceivedSupportSharesErrors];
+
+export type ListReceivedSupportSharesResponses = {
+	/**
+	 * OK
+	 */
+	200: Array<SupportShareReceived>;
+};
+
+export type ListReceivedSupportSharesResponse =
+	ListReceivedSupportSharesResponses[keyof ListReceivedSupportSharesResponses];
+
+export type ReadSupportShareData = {
+	body?: never;
+	path: {
+		shareId: string;
+	};
+	query?: never;
+	url: "/admin/support-shares/{shareId}";
+};
+
+export type ReadSupportShareErrors = {
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type ReadSupportShareError = ReadSupportShareErrors[keyof ReadSupportShareErrors];
+
+export type ReadSupportShareResponses = {
+	/**
+	 * OK
+	 */
+	200: SupportShareReceived;
+};
+
+export type ReadSupportShareResponse = ReadSupportShareResponses[keyof ReadSupportShareResponses];
 
 export type AdminListUsersData = {
 	body?: never;
@@ -14738,6 +14979,69 @@ export type GetSlackUserPreferencesResponses = {
 
 export type GetSlackUserPreferencesResponse =
 	GetSlackUserPreferencesResponses[keyof GetSlackUserPreferencesResponses];
+
+export type ListOwnSupportSharesData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/user/support-shares";
+};
+
+export type ListOwnSupportSharesErrors = {
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type ListOwnSupportSharesError =
+	ListOwnSupportSharesErrors[keyof ListOwnSupportSharesErrors];
+
+export type ListOwnSupportSharesResponses = {
+	/**
+	 * OK
+	 */
+	200: Array<SupportShare>;
+};
+
+export type ListOwnSupportSharesResponse =
+	ListOwnSupportSharesResponses[keyof ListOwnSupportSharesResponses];
+
+export type RevokeSupportShareData = {
+	body?: never;
+	path: {
+		shareId: string;
+	};
+	query?: never;
+	url: "/user/support-shares/{shareId}";
+};
+
+export type RevokeSupportShareErrors = {
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type RevokeSupportShareError = RevokeSupportShareErrors[keyof RevokeSupportShareErrors];
+
+export type RevokeSupportShareResponses = {
+	/**
+	 * OK
+	 */
+	200: SupportShare;
+};
+
+export type RevokeSupportShareResponse =
+	RevokeSupportShareResponses[keyof RevokeSupportShareResponses];
 
 export type ReportWebVitalsData = {
 	body: WebVitalsReport;
@@ -18269,81 +18573,6 @@ export type UpdateWorkspacePasskeyPolicyResponses = {
 export type UpdateWorkspacePasskeyPolicyResponse =
 	UpdateWorkspacePasskeyPolicyResponses[keyof UpdateWorkspacePasskeyPolicyResponses];
 
-export type GetPerPersonResultsData = {
-	body?: never;
-	path: {
-		/**
-		 * Workspace slug
-		 */
-		workspaceSlug: string;
-	};
-	query?: never;
-	url: "/workspaces/{workspaceSlug}/per-person-results";
-};
-
-export type GetPerPersonResultsErrors = {
-	/**
-	 * A problem. Its type names the kind.
-	 */
-	"4XX": ProblemDetail;
-	/**
-	 * A problem. Its type names the kind.
-	 */
-	"5XX": ProblemDetail;
-};
-
-export type GetPerPersonResultsError = GetPerPersonResultsErrors[keyof GetPerPersonResultsErrors];
-
-export type GetPerPersonResultsResponses = {
-	/**
-	 * OK
-	 */
-	200: PerPersonResults;
-};
-
-export type GetPerPersonResultsResponse =
-	GetPerPersonResultsResponses[keyof GetPerPersonResultsResponses];
-
-export type UpdatePerPersonResultsData = {
-	body: UpdatePerPersonResults;
-	path: {
-		/**
-		 * Workspace slug
-		 */
-		workspaceSlug: string;
-	};
-	query?: never;
-	url: "/workspaces/{workspaceSlug}/per-person-results";
-};
-
-export type UpdatePerPersonResultsErrors = {
-	/**
-	 * The caller is not an owner and asked to turn it on
-	 */
-	403: ProblemDetail;
-	/**
-	 * A problem. Its type names the kind.
-	 */
-	"4XX": ProblemDetail;
-	/**
-	 * A problem. Its type names the kind.
-	 */
-	"5XX": ProblemDetail;
-};
-
-export type UpdatePerPersonResultsError =
-	UpdatePerPersonResultsErrors[keyof UpdatePerPersonResultsErrors];
-
-export type UpdatePerPersonResultsResponses = {
-	/**
-	 * The setting after the change
-	 */
-	200: PerPersonResults;
-};
-
-export type UpdatePerPersonResultsResponse =
-	UpdatePerPersonResultsResponses[keyof UpdatePerPersonResultsResponses];
-
 export type ListAdoptablePracticesData = {
 	body?: never;
 	path: {
@@ -20790,7 +21019,6 @@ export type ListReviewsData = {
 		kind?: ReviewKind;
 		reviewId?: string;
 		itemId?: string;
-		personId?: number;
 		practiceSlug?: string;
 		groupSlug?: string;
 		from?: Date;
@@ -20841,7 +21069,6 @@ export type ListReviewFeedbackData = {
 		itemKind?: string;
 		practiceSlug?: string;
 		groupSlug?: string;
-		personId?: string;
 		destination?: Array<FeedbackDestination>;
 		state?: Array<FeedbackState>;
 		location?: FeedbackLocation;
@@ -20895,7 +21122,6 @@ export type CountReviewFeedbackByLocationData = {
 		itemKind?: string;
 		practiceSlug?: string;
 		groupSlug?: string;
-		personId?: string;
 		destination?: Array<FeedbackDestination>;
 		state?: Array<FeedbackState>;
 		location?: FeedbackLocation;
@@ -20948,7 +21174,6 @@ export type CountReviewFeedbackByReasonData = {
 		itemKind?: string;
 		practiceSlug?: string;
 		groupSlug?: string;
-		personId?: string;
 		destination?: Array<FeedbackDestination>;
 		state?: Array<FeedbackState>;
 		location?: FeedbackLocation;
@@ -21280,7 +21505,6 @@ export type ListReviewProblemsData = {
 		itemKind?: string;
 		practiceSlug?: string;
 		groupSlug?: string;
-		personId?: number;
 		outcome?: Array<ResultOutcome>;
 		severity?: Array<Severity>;
 		currentness?: Currentness;
@@ -21405,7 +21629,6 @@ export type ListReviewResultsData = {
 		itemKind?: string;
 		practiceSlug?: string;
 		groupSlug?: string;
-		personId?: number;
 		outcome?: Array<ResultOutcome>;
 		severity?: Array<Severity>;
 		currentness?: Currentness;
@@ -23217,6 +23440,86 @@ export type UpdateStatusResponses = {
 
 export type UpdateStatusResponse = UpdateStatusResponses[keyof UpdateStatusResponses];
 
+export type CreateSupportShareData = {
+	body: SupportShareRequest;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+		turnId: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/support-shares/turns/{turnId}";
+};
+
+export type CreateSupportShareErrors = {
+	/**
+	 * The messages changed after the preview
+	 */
+	409: ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type CreateSupportShareError = CreateSupportShareErrors[keyof CreateSupportShareErrors];
+
+export type CreateSupportShareResponses = {
+	/**
+	 * The share
+	 */
+	201: SupportShare;
+};
+
+export type CreateSupportShareResponse =
+	CreateSupportShareResponses[keyof CreateSupportShareResponses];
+
+export type PreviewSupportShareData = {
+	body: SupportSharePreviewRequest;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+		turnId: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/support-shares/turns/{turnId}/preview";
+};
+
+export type PreviewSupportShareErrors = {
+	/**
+	 * The turn is not one of yours
+	 */
+	404: ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"4XX": ProblemDetail;
+	/**
+	 * A problem. Its type names the kind.
+	 */
+	"5XX": ProblemDetail;
+};
+
+export type PreviewSupportShareError = PreviewSupportShareErrors[keyof PreviewSupportShareErrors];
+
+export type PreviewSupportShareResponses = {
+	/**
+	 * The preview
+	 */
+	200: SupportSharePreview;
+};
+
+export type PreviewSupportShareResponse =
+	PreviewSupportShareResponses[keyof PreviewSupportShareResponses];
+
 export type GetWorkspaceSyncProgressData = {
 	body?: never;
 	path: {
@@ -23462,85 +23765,6 @@ export type UpdateTokenResponses = {
 };
 
 export type UpdateTokenResponse = UpdateTokenResponses[keyof UpdateTokenResponses];
-
-export type ListUserViewUsersData = {
-	body?: never;
-	path: {
-		/**
-		 * Workspace slug
-		 */
-		workspaceSlug: string;
-	};
-	query?: {
-		page?: number;
-		size?: number;
-	};
-	url: "/workspaces/{workspaceSlug}/user-view/users";
-};
-
-export type ListUserViewUsersErrors = {
-	/**
-	 * A problem. Its type names the kind.
-	 */
-	"4XX": ProblemDetail;
-	/**
-	 * A problem. Its type names the kind.
-	 */
-	"5XX": ProblemDetail;
-};
-
-export type ListUserViewUsersError = ListUserViewUsersErrors[keyof ListUserViewUsersErrors];
-
-export type ListUserViewUsersResponses = {
-	/**
-	 * OK
-	 */
-	200: OffsetPageDtoUserViewAccount;
-};
-
-export type ListUserViewUsersResponse =
-	ListUserViewUsersResponses[keyof ListUserViewUsersResponses];
-
-export type GetUserViewUserData = {
-	body?: never;
-	headers: {
-		/**
-		 * Why the administrator views this account: percent-encoded UTF-8, 1–500 characters
-		 */
-		"X-User-View-Reason": string;
-	};
-	path: {
-		/**
-		 * Workspace slug
-		 */
-		workspaceSlug: string;
-		accountId: string;
-	};
-	query?: never;
-	url: "/workspaces/{workspaceSlug}/user-view/users/{accountId}";
-};
-
-export type GetUserViewUserErrors = {
-	/**
-	 * A problem. Its type names the kind.
-	 */
-	"4XX": ProblemDetail;
-	/**
-	 * A problem. Its type names the kind.
-	 */
-	"5XX": ProblemDetail;
-};
-
-export type GetUserViewUserError = GetUserViewUserErrors[keyof GetUserViewUserErrors];
-
-export type GetUserViewUserResponses = {
-	/**
-	 * OK
-	 */
-	200: UserViewAccount;
-};
-
-export type GetUserViewUserResponse = GetUserViewUserResponses[keyof GetUserViewUserResponses];
 
 export type GetUsersWithTeamsData = {
 	body?: never;

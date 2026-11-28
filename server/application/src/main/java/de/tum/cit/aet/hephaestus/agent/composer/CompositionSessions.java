@@ -773,6 +773,8 @@ public class CompositionSessions {
     static String textRefusal(FeedbackTextRefusedException refused) {
         String broken = switch (refused.rule()) {
             case "LINK" -> "has a link that no cited quote supplies. Write no links: Hephaestus adds its own";
+            case "COUNT" ->
+                "states a number that no cited quote supplies. Leave the count out, or state only a number that a cited quote has";
             case "MENTION" ->
                 "has an @-mention or Slack mention. Mention no one, and put code such as `@Override` in backticks";
             case "HTML" -> "has raw HTML. Put code such as `List<String>` in backticks";

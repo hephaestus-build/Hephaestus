@@ -8,18 +8,14 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.BearerTokenReplacem
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.audit.WorkspaceAuditSnapshots;
-import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.dto.UpdateWorkspaceFeaturesRequestDTO;
 import java.time.Clock;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -44,30 +40,6 @@ public class WorkspaceSettingsService {
                 workspaceId,
                 new WorkspaceAuditSnapshots.PasskeyPolicySnapshot(previous),
                 new WorkspaceAuditSnapshots.PasskeyPolicySnapshot(required)));
-    }
-
-    /**
-     * Turns per-person results for admins on or off. Only an owner turns them on; any admin, owner included, turns
-     * them off, so the narrower view is always one step away.
-     *
-     * @throws ResponseStatusException 403 when someone who is not an owner turns them on
-     */
-    @Transactional
-    public Workspace updatePerPersonResults(WorkspaceContext context, boolean enabled) {
-        if (enabled && !context.hasRole(WorkspaceRole.OWNER)) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "Only a workspace owner can turn on per-person results for admins.");
-        }
-        Workspace workspace = requireWorkspace(context.id());
-        boolean previous = workspace.isPerPersonResultsForAdmins();
-        workspace.setPerPersonResultsForAdmins(enabled);
-        configAudit.record(ConfigAuditEntry.updated(
-                ConfigAuditEntityType.WORKSPACE_VISIBILITY,
-                context.id(),
-                context.id(),
-                new WorkspaceAuditSnapshots.PerPersonResultsSnapshot(previous),
-                new WorkspaceAuditSnapshots.PerPersonResultsSnapshot(enabled)));
-        return workspaceRepository.save(workspace);
     }
 
     /**

@@ -16,5 +16,10 @@ public enum UsageSourceType {
      */
     PRODUCT_FEEDBACK_DRAFT,
     /** Synthetic capability checks; source_id groups the baseline and forced-choice calls, without a run. */
-    PROBE;
+    PROBE,
+    /**
+     * A model call of a personal conversation with no workspace: the source is the personal attempt, and the personal
+     * purse of the instance pays. No producer writes these rows yet.
+     */
+    PERSONAL_CONVERSATION;
 }

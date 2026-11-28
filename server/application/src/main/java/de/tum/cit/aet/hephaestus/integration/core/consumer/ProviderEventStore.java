@@ -94,14 +94,7 @@ public class ProviderEventStore {
     public int store(List<Arrival> arrivals) {
         int stored = 0;
         for (Arrival arrival : arrivals) {
-            stored += events.store(new ProviderEventRepository.NewEvent(
-                    arrival.workspaceId(),
-                    arrival.provider(),
-                    arrival.subject(),
-                    scopeKey(arrival.workspaceId(), arrival.subject()),
-                    arrival.deliveryKey(),
-                    mapper.writeValueAsString(arrival.headers()),
-                    arrival.payload()));
+            stored += events.store(ProviderEventIntake.row(arrival, mapper));
         }
         if (stored > 0) {
             notifications.queuedAfterCommit();

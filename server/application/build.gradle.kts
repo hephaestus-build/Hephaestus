@@ -504,9 +504,17 @@ for ((taskName, tag) in testTiers.filterKeys { it != "test" }) {
             doFirst { pinnedParks.delete() }
             doLast {
                 if (!pinnedParks.isFile) return@doLast
+                // A virtual thread that resolves a class calls the class loader through a VM
+                // upcall. While another thread loads the same class, it waits pinned for the
+                // loader's lock of that class, for one class load. The JDK causes that wait, so
+                // it is left out. A park in a class initializer, or a wait for one, has a frame
+                // of its own on top and fails.
                 val pinned =
                     jdk.jfr.consumer.RecordingFile.readAllEvents(pinnedParks.toPath()).filter {
-                        it.eventType.name == "jdk.VirtualThreadPinned"
+                        val top = it.stackTrace?.frames?.firstOrNull()?.method
+                        it.eventType.name == "jdk.VirtualThreadPinned" &&
+                            !(top?.type?.name == "jdk.internal.loader.BuiltinClassLoader" &&
+                                top.name == "loadClassOrNull")
                     }
                 if (pinned.isNotEmpty()) {
                     val parks =
@@ -669,7 +677,6 @@ pitest {
             "de.tum.cit.aet.hephaestus.core.security.ServerUrlValidator",
             "de.tum.cit.aet.hephaestus.core.security.PrivateAddressGuard",
             "de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy",
-            "de.tum.cit.aet.hephaestus.core.auth.UserViewAccessService",
             "de.tum.cit.aet.hephaestus.integration.core.oauth.state.HmacOAuthStateService",
             "de.tum.cit.aet.hephaestus.core.auth.oauth.AdminBootstrapPolicy",
             "de.tum.cit.aet.hephaestus.core.auth.oauth.ReturnToValidator",
@@ -684,7 +691,6 @@ pitest {
             "de.tum.cit.aet.hephaestus.core.security.ServerUrlValidatorTest",
             "de.tum.cit.aet.hephaestus.core.security.PrivateAddressGuardTest",
             "de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicyTest",
-            "de.tum.cit.aet.hephaestus.core.auth.UserViewAccessServiceTest",
             "de.tum.cit.aet.hephaestus.integration.core.oauth.state.HmacOAuthStateServiceTest",
             "de.tum.cit.aet.hephaestus.core.auth.oauth.AdminBootstrapPolicyTest",
             "de.tum.cit.aet.hephaestus.core.auth.oauth.ReturnToValidatorTest",
@@ -771,7 +777,7 @@ for ((taskName, command) in
                 // index. Partial successor uniqueness is also native;
                 // ClientSessionMigratedSchemaTest
                 // verifies it.
-                "--exclude-objects=table:shedlock,table:account_public_activity_hidden_by_default,table:event_publication,table:auth_rate_limit_bucket,table:auth_event_default,table:auth_event_p\\d+,foreignkey:sfk_.*,index:idx_activity_event_workspace_covering,index:uq_issued_jwt_live_successor",
+                "--exclude-objects=table:shedlock,table:account_public_activity_hidden_by_default,table:event_publication,table:auth_rate_limit_bucket,table:auth_event_default,table:auth_event_p\\d+,foreignkey:sfk_.*,index:idx_activity_event_workspace_covering,index:uq_issued_jwt_live_successor,column:per_person_results_for_admins",
             )
         }
     }

@@ -10,7 +10,7 @@ import { ResultFilters } from "./ResultFilters";
 import type { ResultsSearch } from "./review-search";
 import { ReviewScopeFilters } from "./ReviewScopeFilters";
 import { ReviewSelectionBar } from "./ReviewSelectionBar";
-import { STORY_GROUPS, STORY_PEOPLE, STORY_PRACTICES } from "./story-scope-sources";
+import { STORY_GROUPS, STORY_PRACTICES } from "./story-scope-sources";
 
 const meta = {
 	component: PracticeReviewsLayout,
@@ -34,7 +34,6 @@ const UNFILTERED: ResultsSearch = { outcome: undefined, severity: undefined };
 
 const SCOPED: ResultsSearch = {
 	...UNFILTERED,
-	developerId: STORY_PEOPLE.options[0]?.accountId,
 	practiceSlug: [STORY_PRACTICES.options[0]?.value ?? ""],
 	from: "2026-09-01",
 	to: "2026-09-10",
@@ -50,7 +49,6 @@ function ResultsTab({ search }: { search: ResultsSearch }) {
 				onClearScope={fn()}
 				groups={STORY_GROUPS}
 				practices={STORY_PRACTICES}
-				people={STORY_PEOPLE}
 				total={7}
 			/>
 			<p className="text-sm text-muted-foreground">The observations render here.</p>
@@ -102,7 +100,7 @@ export const ScopeAboveTheTabs: Story = {
 		await expect(precedes(scope, sections)).toBe(true);
 		await expect(precedes(sections, filters)).toBe(true);
 		canvas.getByText("Applies to every tab");
-		for (const name of ["Developer", "Group", "Practice"]) {
+		for (const name of ["Group", "Practice"]) {
 			within(scope).getByRole("combobox", { name });
 		}
 		within(scope).getByRole("button", { name: "Recorded" });
@@ -132,8 +130,8 @@ export const ScopeAndTracking: Story = {
 		const { scope, sections, filters } = layoutOf(canvas);
 		await expect(precedes(scope, sections)).toBe(true);
 		within(scope).getByRole("button", { name: "Clear scope" });
-		await expect(within(scope).getByRole("combobox", { name: /^Developer/u })).toHaveTextContent(
-			STORY_PEOPLE.options[0]?.label ?? "",
+		await expect(within(scope).getByRole("button", { name: /Recorded/u })).toHaveTextContent(
+			"1 Sep – 10 Sep 2026",
 		);
 		const tracking = within(scope).getByRole("group", { name: "Selection" });
 		within(tracking).getByText("Review of #1423 · 5 October, 2:02 pm");
@@ -171,7 +169,7 @@ export const OverviewKeepsTheScope: Story = {
 			<ReviewScopeFilters
 				tab="overview"
 				scope={{
-					developerId: STORY_PEOPLE.options[0]?.accountId,
+					practiceSlug: [STORY_PRACTICES.options[0]?.value ?? ""],
 					from: "2026-09-01",
 					to: "2026-09-10",
 				}}
@@ -180,7 +178,6 @@ export const OverviewKeepsTheScope: Story = {
 				dateTitle="Dates"
 				groups={STORY_GROUPS}
 				practices={STORY_PRACTICES}
-				people={STORY_PEOPLE}
 				notAppliedNote="Not applied on the overview"
 			/>
 		),

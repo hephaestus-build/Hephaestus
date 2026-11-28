@@ -126,7 +126,10 @@ final class CompositionEvalCases {
      * sends back to the model when it refuses.
      */
     record Checked(
-            boolean accepted, List<String> errors, @Nullable String correction) {}
+            boolean accepted,
+            List<String> errors,
+            @Nullable String correction,
+            @Nullable String rule) {}
 
     /** {@link ReviewOnWork#read}, then the text policy that preparation applies, as the composer answers each. */
     static Checked check(Scenario scenario, JsonNode review) {
@@ -145,19 +148,21 @@ final class CompositionEvalCases {
                                     "\n",
                                     read.errors().stream()
                                             .map(error -> "- " + error)
-                                            .toList()));
+                                            .toList()),
+                    null);
         var texts = new LinkedHashMap<String, String>();
         var summary = composed.summary();
         if (summary != null) texts.put("summary", summary.body());
         for (int index = 0; index < composed.inline().size(); index++)
             texts.put("notes[" + index + "]", composed.inline().get(index).body());
-        var refused = FeedbackTextCheck.refusal(texts);
-        if (refused == null) return new Checked(true, List.of(), null);
+        var refused = FeedbackTextCheck.refusal(texts, quotes(scenario.response()), Set.of());
+        if (refused == null) return new Checked(true, List.of(), null, null);
         String reason = CompositionSessions.textRefusal(refused);
         return new Checked(
                 false,
                 List.of("text: " + reason),
-                "review refused, nothing was stored: " + reason + "\nSend the whole review again.");
+                "review refused, nothing was stored: " + reason + "\nSend the whole review again.",
+                refused.rule());
     }
 
     static ObjectNode checkRun(JsonNode run, Map<String, Scenario> scenarios) {
@@ -694,15 +699,16 @@ final class CompositionEvalCases {
             var missing = PrivateFeedback.undecided(admission, draft.feedback, routes);
             if (!draft.complete() || !missing.isEmpty()) {
                 String why = outcome.text() + "; undecided: " + missing;
-                return new Checked(false, List.of(why), why);
+                return new Checked(false, List.of(why), why, null);
             }
             var texts = new LinkedHashMap<String, String>();
             for (int i = 0; i < draft.feedback.size(); i++)
                 texts.put("feedback[" + i + "]", draft.feedback.get(i).feedbackBody());
-            var refused = FeedbackTextCheck.refusal(texts);
-            if (refused == null) return new Checked(true, List.of(), null);
+            var verified = destination.equals("PRACTICE_PAGE") ? supportedItems(response) : Set.<String>of();
+            var refused = FeedbackTextCheck.refusal(texts, quotes(response), verified);
+            if (refused == null) return new Checked(true, List.of(), null, null);
             String why = CompositionSessions.textRefusal(refused);
-            return new Checked(false, List.of(why), why);
+            return new Checked(false, List.of(why), why, refused.rule());
         }
     }
 
@@ -766,6 +772,31 @@ final class CompositionEvalCases {
                 state,
                 request,
                 routes);
+    }
+
+    /**
+     * The count that preparation verifies for a practice page card: the distinct items of the practice's support
+     * occurrences, as {@code FeedbackDraftBuilder} reads them from the admitted rows and the support history.
+     */
+    private static Set<String> supportedItems(JsonNode response) {
+        var items = new HashSet<String>();
+        for (JsonNode practice : response.path("practicePageSupport").path("practices"))
+            for (JsonNode occurrence : practice.path("occurrences"))
+                items.add(occurrence.path("itemId").asString());
+        return items.isEmpty() ? Set.of() : Set.of(Integer.toString(items.size()));
+    }
+
+    /** The quotes of the admitted results and their problems, which supply a composed text's links and counts. */
+    static List<String> quotes(JsonNode admission) {
+        var quotes = new ArrayList<String>();
+        for (JsonNode admitted : admission.path("admitted")) {
+            for (JsonNode citation : admitted.path("evidence").path("citations"))
+                quotes.add(citation.path("quote").asString());
+            for (JsonNode problem : admitted.path("problems"))
+                for (JsonNode citation : problem.path("citations"))
+                    quotes.add(citation.path("quote").asString());
+        }
+        return quotes;
     }
 
     private static ItemRefDTO supportItem(Scenario scenario, int earlier) {

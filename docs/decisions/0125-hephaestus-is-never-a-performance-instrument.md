@@ -8,7 +8,7 @@
 
 **Amends:** [ADR 0093](0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md) rules 1, 19 and 21. [ADR 0088](0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) rule 16. [ADR 0047](0047-the-practice-profile-has-one-reader.md), its View as user exception. [ADR 0051](0051-practices-across-the-workspace-counts-developers.md), its smallest count.
 
-**Amended by:** [ADR 0153](0153-a-public-page-shows-instance-reach-released-once-each-half-year.md)
+**Amended by:** [ADR 0153](0153-a-public-page-shows-instance-reach-released-once-each-half-year.md), [ADR 0164](0164-staff-see-no-private-content-and-support-starts-with-the-person.md)
 
 **Builds on:** ADR 0124 (proposed in #4866)
 

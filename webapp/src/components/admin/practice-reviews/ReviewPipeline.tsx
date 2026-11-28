@@ -208,7 +208,7 @@ function StageTile({
 					<Icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
 					<CardTitleLink
 						workspaceSlug={workspaceSlug}
-						destination={{ list: stage.key, search: scopeSearch(scope, stage.key) }}
+						destination={{ list: stage.key, search: scopeSearch(scope) }}
 					>
 						{stage.title}
 					</CardTitleLink>
@@ -255,7 +255,7 @@ function openReviewsSlot(overview: ReviewOverview, scope: OutcomeScope): Outcome
 		count: overview.reviews.queued + overview.reviews.running,
 		target: {
 			list: "reviews",
-			search: { ...scopeSearch(scope, "reviews"), status: ["QUEUED", "RUNNING"] },
+			search: { ...scopeSearch(scope), status: ["QUEUED", "RUNNING"] },
 		},
 	};
 }
@@ -298,7 +298,7 @@ function FailedShare({
 							workspaceSlug={workspaceSlug}
 							destination={{
 								list: "reviews",
-								search: { ...scopeSearch(scope, "reviews"), status: ["FAILED"] },
+								search: { ...scopeSearch(scope), status: ["FAILED"] },
 							}}
 						/>
 					}

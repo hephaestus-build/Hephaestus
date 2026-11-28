@@ -114,6 +114,8 @@ public class PeopleRegistryService implements PeopleRegistry {
         if (sourceChoiceAt != null && (targetChoiceAt == null || sourceChoiceAt.isAfter(targetChoiceAt))) {
             target.setAiChoice(source.getAiChoice());
             target.setAiChoiceAt(sourceChoiceAt);
+            // The unclaimed account never confirmed that a choice covers personal conversations.
+            target.setAiPersonalScopeAt(null);
         }
         accounts.save(target);
         accounts.delete(source);

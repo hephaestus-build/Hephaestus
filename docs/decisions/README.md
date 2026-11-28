@@ -77,5 +77,6 @@ A new ADR adds only its own file, so two pull requests that each add an ADR do n
 To read the numbers, titles and statuses as one table, run `vp run report:decisions`.
 
 - [ADR 0161](0161-a-verified-slack-dm-can-use-personal-context-with-a-grant.md) amends ADR 0123's Slack detail levels and DM fallback.
+- [ADR 0166](0166-an-editor-host-acts-for-one-team-project-through-a-typed-code-pairing-and-a-team-grant.md) amends ADR 0048 for installed clients without a redirect.
 
 Template: [0000-template.md](0000-template.md).

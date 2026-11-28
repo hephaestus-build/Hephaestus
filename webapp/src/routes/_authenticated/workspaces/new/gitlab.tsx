@@ -327,7 +327,6 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 				{
 					...data,
 					publishesPublicActivity: false,
-					perPersonResultsForAdmins: false,
 					linkHosts: [],
 				},
 			]);

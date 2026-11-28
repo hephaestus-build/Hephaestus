@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -47,7 +48,7 @@ public final class FeedbackDraftBuilder {
         var drafts = new ArrayList<FeedbackDraft>();
         for (var piece : request.composition()) {
             if (!allowedResults.containsAll(piece.resultIds())) throw new AdmissionConflictException();
-            var refusal = texts.refusal(piece);
+            var refusal = texts.refusal(piece, verifiedCounts(piece, byId, historical));
             if (refusal != null) {
                 log.info(
                         "Refused composed {} feedback of review job {}: {} in {}",
@@ -207,5 +208,29 @@ public final class FeedbackDraftBuilder {
                 anchor == null ? null : anchor.side(),
                 id.toString(),
                 kind == FeedbackCopyKind.CHAT_TURN ? null : FeedbackIds.writeMarker(id));
+    }
+
+    /**
+     * The count that the server verified for a piece: the distinct items that a practice page pattern spans. They are
+     * the items of the piece's admitted rows and of the support history of the same practice and developer, because a
+     * card cites only this run's result. No other destination states such a count.
+     */
+    private static Set<String> verifiedCounts(
+            ComposedFeedback piece, Map<UUID, AdmittedResultSnapshot> admitted, List<ResultHistoryEntry> history) {
+        if (piece.destination() != FeedbackDestination.PRACTICE_PAGE) return Set.of();
+        var rows = piece.resultIds().stream()
+                .map(admitted::get)
+                .filter(Objects::nonNull)
+                .toList();
+        if (rows.isEmpty()) return Set.of();
+        long practice = rows.getFirst().candidate().practiceId();
+        Long developer = rows.getFirst().candidate().developerId();
+        var items = new HashSet<Long>();
+        rows.forEach(row -> items.add(row.candidate().itemId()));
+        history.stream()
+                .filter(entry ->
+                        entry.practiceId() == practice && Objects.equals(entry.developerAccountId(), developer))
+                .forEach(entry -> items.add(entry.itemId()));
+        return Set.of(Integer.toString(items.size()));
     }
 }

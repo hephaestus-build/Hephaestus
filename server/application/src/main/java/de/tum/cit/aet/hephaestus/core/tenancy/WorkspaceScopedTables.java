@@ -61,6 +61,8 @@ public class WorkspaceScopedTables {
             // account-scoped like issued_jwt
             "client_session",
             "client_sign_in_handoff",
+            // An editor host's pairing request precedes any workspace (ADR 0166); only its team grant is scoped
+            "host_pairing",
             // Passkey credentials, challenges, and recovery hashes belong to an account across workspaces.
             "passkey_credential",
             "passkey_challenge",
@@ -70,6 +72,13 @@ public class WorkspaceScopedTables {
             "account_export",
             // Account-owned personal goal. Its access boundary is the PostgreSQL owner policy.
             "personal_goal",
+            // The personal mentor's intake rows: account-owned under row-level security.
+            "mentor_event",
+            "mentor_request",
+            "mentor_source",
+            // A person's support share: it belongs to the person and its one recipient, not to the workspace it
+            // names (ADR 0164).
+            "support_share",
             // Instance-wide rights requests and exact provider-identity controls.
             "person_data_request",
             // Restricted recovery facts outlive the workspace or account they identify.
@@ -120,8 +129,10 @@ public class WorkspaceScopedTables {
             // so the
             // inspector watches it and its cross-tenant admin reads opt out per method
             // instead.
-            // Instance LLM settings singleton (egress allowlist + BYO enable); global
+            // Instance LLM settings singleton (egress allowlist + BYO enable + personal purse caps); global
             "instance_llm_settings",
+            // The instance model for personal conversations, one for each tier; no workspace owner
+            "personal_model_assignment",
             // Instance-wide practice catalog overrides; no workspace owner
             "catalog_entry",
             // ECB daily reference rates for display-only currency conversion; not a

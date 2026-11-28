@@ -35,15 +35,6 @@ public class CurrentAccountUsers {
     }
 
     /**
-     * Resolve one account without relying on the request's authentication (exports and provider
-     * events).
-     */
-    @Transactional(readOnly = true)
-    public List<ActorProfile> resolve(Long accountId) {
-        return resolveAccountUsers(accountId);
-    }
-
-    /**
      * The server URL of each active link that the authenticated account holds on a git provider of this
      * type. A link needs no synced actor.
      */

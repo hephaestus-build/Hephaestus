@@ -4,6 +4,8 @@
 **Date:** 2026-11-24
 **Authors:** Felix T.J. Dietrich
 
+**Amended by:** [ADR 0164](0164-staff-see-no-private-content-and-support-starts-with-the-person.md)
+
 **Builds on:** [ADR 0084](0084-every-statement-on-workspace-data-binds-its-workspace.md) (workspace tenancy in SQL), [ADR 0126](0126-a-person-has-one-relationship-and-a-personal-space.md) (the relationship and the personal space)
 
 **Relates to:** ADR 0121 (proposed in #4862, the audience rule), ADR 0141 (proposed in #4868, research datasets), [ADR 0134](0134-the-authorization-recheck-runs-at-three-boundaries-with-two-authorization-generations.md) (the recheck of current access)

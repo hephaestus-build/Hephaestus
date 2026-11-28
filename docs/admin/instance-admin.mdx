@@ -1,6 +1,6 @@
 ---
 title: Operate the instance admin console
-description: Manage accounts, workspaces, audits, AI usage, silent mode, and provider removals across the instance.
+description: Manage accounts, workspaces, support shares, audits, AI usage, person data, silent mode, and provider removals across the instance.
 page_type: reference
 ---
 
@@ -114,31 +114,38 @@ Hephaestus audits this access.
 [Instance administration](/contributor/instance-admin#who-is-an-instance-admin) owns the authority.
 See the [elevated-access audit policy](/contributor/instance-admin#elevated-workspace-access).
 
-### View as user
+## Support shares
 
-**View as user** gives access to a member's permitted read-only pages for support.
-The member's conversation stays private.
-It requires a recent sign-in.
-Each read about the member has a **USER_VIEW** audit record with the instance admin, member, workspace, and reason.
-If Hephaestus cannot record the audit, it refuses access.
+No console page shows a person's conversation, Practice profile or private feedback, and you cannot download a person's data.
+A person can share one turn of their conversation with you: [Share a question with support](/user/privacy#share-a-question-with-support).
+**Support shares** lists the shares that people addressed to you and that still run.
 
-1. In the row of the workspace, select **View as user**.
-2. In the row of the member, select **View as user**.
-3. Supply a reason.
+1. Open **Instance administration → Support shares**.
+2. Select a share to read it.
+   The read requires a recent sign-in.
 
-The view permits reads only. It cannot send a Hephaestus reply, submit feedback, change settings, or run a
-review as that member.
-Your own session remains the identity that acts.
-This is not a sign-in as the member.
+A share shows the diagnostics of the turn and the name of the person who shared it:
 
-1. Use the view's exit control to return to your own account.
+- The turn ID and the run ID. Use the run ID to find the turn in the server logs and metrics.
+- The surface, the status and the attempt of the turn.
+- The failure reason as a closed kind, the failed model call and the status that the provider answered.
+- The times when the turn was queued, started and finished.
+
+A share shows the messages of the turn only if the person added them.
+It hides them when the person deleted or changed one after the share, or when the message was erased.
+
+Each read counts.
+The person sees the count and the time of the last read.
+A share runs for 7 days, and the person can revoke it at any time.
+After that, it is no longer in your list.
 
 ## Audit
 
 You cannot edit audit entries through the console.
 For retention and access policy, use the [data-protection documentation](./dsms).
 
-1. Read authentication events, user views, and configuration changes.
+1. Read authentication events and configuration changes.
+   Entries of type `USER_VIEW` record reads through the removed read-only user view. They stay as the record of those reads.
 2. Use the available filters to find who changed a setting and when.
 
 An entry keeps the type that it was written with.
@@ -177,6 +184,7 @@ In those tables, **No price set** counts the uses that have usage without a pric
 
 The person-data console handles access and erasure requests, including people who have never signed
 in.
+It previews and erases what Hephaestus holds about one person. It never hands you the records of an access request.
 
 To answer a request, follow [Answer an access or erasure request](./person-data-requests).
 
@@ -272,4 +280,3 @@ Roster sync can create an Unclaimed human account with membership before the per
 It creates no sign-in credential and gives bots no account.
 A verified sign-in claims the existing identity rather than creating another developer.
 Account choices apply across connected identities and workspaces.
-View-as remains an audited admin read and cannot establish the developer's private feedback delivery.

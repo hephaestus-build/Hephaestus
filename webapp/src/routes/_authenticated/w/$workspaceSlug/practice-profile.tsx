@@ -144,9 +144,7 @@ interface OpenTour {
 }
 
 function PracticeProfile() {
-	// A user view reads the developer's page and answers nothing on their behalf.
 	const auth = useAuth();
-	const readOnly = auth.userView !== undefined;
 	// The tour's records in this browser belong to this account, never to whoever used it before.
 	const accountId = auth.getUserId();
 	const [tour, setTour] = useState<OpenTour | null>(null);
@@ -170,7 +168,6 @@ function PracticeProfile() {
 	const setView = (view: Partial<PracticeProfileSearch>) => stackControls.setView(view);
 
 	const featureState = useWorkspaceFeatures(workspaceSlug);
-	const perPersonResults = featureState.perPersonResultsForAdmins;
 	const focusSwitch = usePracticeFocusSwitch(workspaceSlug);
 	const {
 		groups,
@@ -243,8 +240,8 @@ function PracticeProfile() {
 	]);
 
 	// A step of Get started asked for a chapter: it opens once the page has loaded, because the tour
-	// speaks from the reader's real data. Never in a user view, which reads someone else's page. Once
-	// it opens, the tour holds its own state, so a later change here cannot close it.
+	// speaks from the reader's real data. Once it opens, the tour holds its own state, so a later
+	// change here cannot close it.
 	if (search.tour === undefined && askedTour !== undefined) {
 		setAskedTour(undefined);
 	}
@@ -252,7 +249,6 @@ function PracticeProfile() {
 		search.tour !== undefined &&
 		search.tour !== askedTour &&
 		tour === null &&
-		!readOnly &&
 		page.status === "ready"
 	) {
 		setAskedTour(search.tour);
@@ -265,9 +261,7 @@ function PracticeProfile() {
 	}
 
 	const composed = composeOverview(overview);
-	// A user view reads the developer's page; it never spends their workspace's budget.
-	const onReviewNow = readOnly ? undefined : reviews.onReviewNow;
-	const accepted = readOnly ? undefined : reviews.accepted;
+	const { onReviewNow, accepted } = reviews;
 	// The new review opens over the list, without the tab and filters chosen on a review.
 	const requestedReview = accepted && (
 		<ReviewRequestedNotice
@@ -302,7 +296,7 @@ function PracticeProfile() {
 		practices: practiceStandings,
 		groups,
 		feedbackCards: feedback.cards,
-		ratingProps: readOnly ? undefined : feedback.ratingProps,
+		ratingProps: feedback.ratingProps,
 		onOpenGroup: openGroup,
 		onOpenPractice: openPractice,
 		feedbackTab: search.feedback,
@@ -316,7 +310,6 @@ function PracticeProfile() {
 						activeReview: overview.activeReview ?? undefined,
 						...firstRunLinks({
 							workspaceSlug,
-							readOnly,
 							isAdmin,
 							returnTo: `/w/${workspaceSlug}/practice-profile`,
 						}),
@@ -348,11 +341,10 @@ function PracticeProfile() {
 		<>
 			<PracticeProfilePage
 				{...pageProps}
-				perPersonResults={perPersonResults}
 				firstRun={
 					pageProps.firstRun && {
 						...pageProps.firstRun,
-						tourOffer: readOnly ? undefined : (
+						tourOffer: (
 							<TourOffer onSelect={() => startTour("how-it-works")} pending={tourLoading}>
 								See how feedback comes about
 							</TourOffer>
@@ -362,28 +354,24 @@ function PracticeProfile() {
 				tourAction={
 					// The page header offers it once the page has loaded: until then the tour has no real data
 					// to speak from.
-					readOnly ? undefined : (
-						<Button
-							pending={tourLoading}
-							variant="quiet"
-							size="sm"
-							{...TOUR_START_PROPS}
-							onClick={() => startTour()}
-							onPointerEnter={preloadTour}
-							onFocus={preloadTour}
-							aria-busy={tourLoading}
-						>
-							<CompassIcon aria-hidden />
-							Take the tour
-						</Button>
-					)
+					<Button
+						pending={tourLoading}
+						variant="quiet"
+						size="sm"
+						{...TOUR_START_PROPS}
+						onClick={() => startTour()}
+						onPointerEnter={preloadTour}
+						onFocus={preloadTour}
+						aria-busy={tourLoading}
+					>
+						<CompassIcon aria-hidden />
+						Take the tour
+					</Button>
 				}
 				firstCardOffer={
-					readOnly ? undefined : (
-						<TourOffer onSelect={() => startTour("your-profile")} pending={tourLoading}>
-							See how to read a feedback card
-						</TourOffer>
-					)
+					<TourOffer onSelect={() => startTour("your-profile")} pending={tourLoading}>
+						See how to read a feedback card
+					</TourOffer>
 				}
 			/>
 			<CatchBoundary
@@ -412,7 +400,7 @@ function PracticeProfile() {
 				</Suspense>
 			</CatchBoundary>
 			<PracticeGroupDetailDrawer
-				detail={readOnly ? { ...detail, responses: undefined } : detail}
+				detail={detail}
 				detailStack={detailStack}
 				allPracticeGroups={{
 					practicesByGroup,
@@ -429,7 +417,7 @@ function PracticeProfile() {
 				state={page}
 				feedbackCards={feedback.cards}
 				groupOverview={(groupSlug) => composeGroupOverview(overview, groupSlug)}
-				ratingProps={readOnly ? undefined : feedback.ratingProps}
+				ratingProps={feedback.ratingProps}
 				onOpenPractice={(practiceSlug) => stackControls.open(practiceLevel(practiceSlug))}
 				practiceTab={search.practiceTab}
 				markedFeedbackId={search.feedbackCard}
@@ -504,25 +492,20 @@ function PracticeProfile() {
 					},
 				}}
 				onSelectionChange={setView}
-				// The way to the same group or practice across the workspace. Not in a user view,
-				// where that page would count the viewer instead of the developer.
-				levelFooter={
-					readOnly
-						? undefined
-						: (entry) => (
-								<ProfileFocusFooter
-									entry={entry}
-									stack={detailStack}
-									groupOf={(slug) => groupOf(slug)?.slug}
-									nameOf={(focus) =>
-										focus.practiceSlug === undefined
-											? groups.find((each) => each.slug === focus.groupSlug)?.name
-											: practiceStandings.find((each) => each.slug === focus.practiceSlug)?.name
-									}
-									onSwitch={focusSwitch.toWorkspace}
-								/>
-							)
-				}
+				// The way to the same group or practice across the workspace.
+				levelFooter={(entry) => (
+					<ProfileFocusFooter
+						entry={entry}
+						stack={detailStack}
+						groupOf={(slug) => groupOf(slug)?.slug}
+						nameOf={(focus) =>
+							focus.practiceSlug === undefined
+								? groups.find((each) => each.slug === focus.groupSlug)?.name
+								: practiceStandings.find((each) => each.slug === focus.practiceSlug)?.name
+						}
+						onSwitch={focusSwitch.toWorkspace}
+					/>
+				)}
 			/>
 		</>
 	);
@@ -577,7 +560,6 @@ function OwnObservationDetail({
 	resultId: string;
 	practiceSlug: string;
 }) {
-	const { userView } = useAuth();
 	// The asked observation's own read fills this cache entry first; opening its row reuses it.
 	const result = useQuery({
 		...getOwnResultOptions({ path: { workspaceSlug, resultId } }),
@@ -626,11 +608,7 @@ function OwnObservationDetail({
 						})}
 					/>
 				),
-				...(userView === undefined
-					? {
-							conversation: <Link to="/w/$workspaceSlug/conversation" params={{ workspaceSlug }} />,
-						}
-					: {}),
+				conversation: <Link to="/w/$workspaceSlug/conversation" params={{ workspaceSlug }} />,
 			}}
 		/>
 	);

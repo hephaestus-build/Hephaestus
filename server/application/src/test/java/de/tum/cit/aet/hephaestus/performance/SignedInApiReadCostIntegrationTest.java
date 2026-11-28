@@ -48,7 +48,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 class SignedInApiReadCostIntegrationTest extends RealAuthIntegrationTest {
     /**
      * The routes that answer this fixture with another status than 200 by design: it connects no Outline, Slack or
-     * GitLab account, sets no practice repository, has no exportable scan or public onboarding, and opens no user view.
+     * GitLab account, sets no practice repository, has no exportable scan, public onboarding or support share.
      * Every other route must answer 200, so a route that fails at both sizes cannot drop out of both measurements.
      */
     private static final Map<String, Integer> NOT_OK = Map.of(
@@ -58,10 +58,9 @@ class SignedInApiReadCostIntegrationTest extends RealAuthIntegrationTest {
             "getPracticeRepository", 204,
             "getPublicActivityOnboarding", 404,
             "getSlackScopes", 412,
-            "getUserViewUser", 403,
             "listOutlineCollectionCandidates", 404,
             "listOutlineCollections", 404,
-            "listUserViewUsers", 403);
+            "readSupportShare", 404);
 
     @Autowired
     private WebTestClient defaultHttp;

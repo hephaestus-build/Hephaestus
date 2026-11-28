@@ -43,7 +43,6 @@ export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 	waitingReports?: number;
 	/** Lists Ask Hephaestus in the main navigation of the active workspace; the container decides from membership and setup. */
 	showConversation: boolean;
-	readOnly?: boolean;
 	integrationKinds: readonly IntegrationCatalogEntry["kind"][];
 	/** Feedback awaiting approval in the active workspace, for an admin; undefined while unknown. */
 	awaitingApproval?: number;
@@ -69,7 +68,6 @@ export function AppSidebar({
 	isAppAdmin,
 	waitingReports,
 	showConversation,
-	readOnly = false,
 	integrationKinds,
 	awaitingApproval,
 	context,
@@ -174,7 +172,6 @@ export function AppSidebar({
 				<NavWorkspace
 					workspaceSlug={activeWorkspace.workspaceSlug}
 					practicesEnabled={activeWorkspace.practicesEnabled}
-					readOnly={readOnly}
 				/>
 				{isAdmin && (
 					<>
@@ -208,7 +205,7 @@ export function AppSidebar({
 						workspaces={workspaces}
 						activeWorkspace={activeWorkspace}
 						onWorkspaceChange={onWorkspaceChange}
-						onAddWorkspace={readOnly ? undefined : onAddWorkspace}
+						onAddWorkspace={onAddWorkspace}
 						isAppAdmin={isAppAdmin}
 					/>
 				)}
@@ -216,13 +213,11 @@ export function AppSidebar({
 			</SidebarHeader>
 			<SidebarContent onClick={handleSectionClick}>{sidebarContent}</SidebarContent>
 			<SidebarFooter onClick={handleSectionClick}>
-				{!readOnly && (
-					<NavFooter
-						isAppAdmin={isAppAdmin}
-						waitingReports={waitingReports}
-						workspaceSlug={activeWorkspace?.workspaceSlug}
-					/>
-				)}
+				<NavFooter
+					isAppAdmin={isAppAdmin}
+					waitingReports={waitingReports}
+					workspaceSlug={activeWorkspace?.workspaceSlug}
+				/>
 			</SidebarFooter>
 			<SidebarRail />
 		</Sidebar>

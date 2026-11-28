@@ -6,14 +6,19 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 public interface AccountDirectory {
+    /** It may return this transaction's cached account; after a lock or fence, read consent fresh. */
     Optional<AccountView> find(long accountId);
 
     Map<Long, AccountView> findAll(Collection<Long> accountIds);
+
+    /** The active instance admins, who can receive a person's support share. */
+    List<AccountView> activeInstanceAdmins();
 
     /** Locks an account eligible for retention in the caller's transaction. */
     boolean holdForRetention(long accountId);

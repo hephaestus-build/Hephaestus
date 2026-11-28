@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataBundles;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataService;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
@@ -228,7 +229,7 @@ class SourceProviderNamespacesIntegrationTest extends BaseIntegrationTest {
         admin.setAppRole(Account.AppRole.APP_ADMIN);
         long adminId = Objects.requireNonNull(accounts.saveAndFlush(admin).getId());
         var preview = persons.preview(adminId, null, List.of(exact));
-        assertThat(persons.export(preview.request().getId())
+        assertThat(PersonDataBundles.of(persons, transactions, preview.request().getId())
                         .path("stores")
                         .path("outline_document")
                         .size())

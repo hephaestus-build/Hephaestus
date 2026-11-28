@@ -63,7 +63,6 @@ Elevation does not grant OWNER. An explicit OWNER membership still permits owner
 Elevation does not make them a member either.
 
 Declare member-only features, such as Hephaestus, with `@PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")`.
-A user view still satisfies this check as the viewed member.
 
 `@PreAuthorize("@workspaceSecure.isMember()")` admits any effective role, including elevation, but never anonymous access.
 The Activity endpoints use this check.
@@ -89,15 +88,15 @@ The database holds these rules:
 
 `WorkspaceContextFilter` admits only the owner to a personal space, as themselves.
 It checks this before instance-admin elevation.
-Another signed-in account, an instance admin or a user view gets the 404 of an unknown workspace.
+Another signed-in account or an instance admin gets the 404 of an unknown workspace.
 That refusal writes no elevation audit row.
 
 Only the filter looks up a workspace of any kind by slug, with `findAnyKindByWorkspaceSlug`.
 Every other lookup by slug or provider login finds team workspaces only.
-Thus, user view, the instance console, the instance budget routes, public activity, MCP and provider routing never reach a personal space.
+The instance console, the instance budget routes, public activity, MCP and provider routing never reach a personal space.
 Bootstrap and startup activation read team workspaces only.
 
-An instance admin's person-data preview and export of an account select its team memberships only.
+An instance admin's person-data preview and erasure of an account select its team memberships only.
 They name the personal space only by its slug and creation time (`PersonalSpacePersonDataStore`).
 `WorkspaceKindArchitectureTest` fails when another class calls the any-kind lookup.
 
@@ -178,7 +177,6 @@ No first-linked provider preference chooses the developer's results.
 Slack and Outline require their exact provider/team identity plus membership in the target workspace.
 Active account and identity authority remain separate checks for outgoing conversation access.
 An elevated instance admin without membership does not inherit a developer identity from a display login.
-A view-as read keeps its audited actor and does not prove developer feedback delivery.
 
 The [account decision](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0019-workspace-membership-keyed-on-account.md) owns the identity model.
 The [data map](/admin/dsms/personal-data-map) owns erasure and restrictions.

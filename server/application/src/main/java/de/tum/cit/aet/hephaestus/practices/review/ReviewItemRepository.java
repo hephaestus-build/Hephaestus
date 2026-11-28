@@ -44,18 +44,29 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
     List<ReviewPracticeCounts> practiceCounts(long ws, Collection<UUID> ids);
 
     /**
-     * Each item review's practices that its attempts work on, and how many of them an attempt ended. An attempt binds
-     * a practice's items to its job, and the practice ends when none of them is still listed. A practice decided at
-     * creation, such as one withheld for readiness, has no job and is not counted, so a review that has not started
-     * ends nothing. A scan lists its items in pages, so its practices are not all known yet, and it has none here.
+     * Each item review's practices that its attempts work on, how many of them an attempt ended, and how its items
+     * stand. An attempt binds a practice's items to its job, and the practice ends when none of them is still listed.
+     * A practice decided at creation, such as one withheld for readiness, has no job and is not counted, so a review
+     * that has not started ends nothing. A scan lists its items in pages, so its practices are not all known yet, and
+     * it has no row here.
      */
     @Query(value = """
-        SELECT review_id AS reviewId,COUNT(*) AS practices,COUNT(*) FILTER(WHERE listed=0) AS ended FROM (
-          SELECT m.review_id,m.practice_id,COUNT(*) FILTER(WHERE m.state='LISTED') AS listed,
-            COUNT(*) FILTER(WHERE m.job_id IS NOT NULL) AS bound FROM review_item m
-          JOIN review q ON q.workspace_id=m.workspace_id AND q.id=m.review_id AND q.kind='ITEM'
-          WHERE m.workspace_id=:ws AND m.review_id IN (:ids) GROUP BY m.review_id,m.practice_id) p
-        WHERE listed>0 OR bound>0 GROUP BY review_id
+        SELECT q.id AS reviewId,
+          COUNT(*) FILTER(WHERE p.listed>0 OR p.bound>0) AS practices,
+          COUNT(*) FILTER(WHERE p.listed=0 AND p.bound>0) AS ended,
+          COALESCE(SUM(p.unsettled),0) AS unsettled,
+          COALESCE(SUM(p.checked),0) AS checked,
+          COALESCE(SUM(p.withheld),0) AS withheld
+        FROM review q LEFT JOIN (
+          SELECT m.review_id,COUNT(*) FILTER(WHERE m.state='LISTED') AS listed,
+            COUNT(*) FILTER(WHERE m.job_id IS NOT NULL) AS bound,
+            COUNT(*) FILTER(WHERE m.state IN ('LISTED','STAGED')) AS unsettled,
+            COUNT(*) FILTER(WHERE m.state IN ('JUDGED','REUSED','TRIED')) AS checked,
+            COUNT(*) FILTER(WHERE m.state='WITHHELD') AS withheld
+          FROM review_item m WHERE m.workspace_id=:ws AND m.review_id IN (:ids)
+          GROUP BY m.review_id,m.practice_id) p ON p.review_id=q.id
+        WHERE q.workspace_id=:ws AND q.id IN (:ids) AND q.kind='ITEM'
+        GROUP BY q.id
         """, nativeQuery = true)
     List<ReviewProgressCounts> progress(long ws, Collection<UUID> ids);
 
@@ -65,6 +76,12 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
         long getPractices();
 
         long getEnded();
+
+        long getUnsettled();
+
+        long getChecked();
+
+        long getWithheld();
     }
 
     interface ReviewPracticeCounts extends PracticeCounts {

@@ -130,8 +130,14 @@ public class AccountService {
                         "We could not find that connected account. It may"
                                 + " have been deleted. Reload the page to see"
                                 + " what is current."));
-        if (isSignInIdentity(target)
-                && active.stream().filter(this::isSignInIdentity).count() <= 1) {
+        // This release signs in through GitHub and GitLab only. An OIDC identity that a later release linked
+        // is a way in there, so this release neither drops it nor drops the last way in that it serves.
+        boolean guarded = isSignInIdentity(target)
+                || providers.providerTypeName(target.getProviderId()).equals("OIDC");
+        if (guarded
+                && active.stream()
+                        .filter(identity -> !identity.getId().equals(identityId))
+                        .noneMatch(this::isSignInIdentity)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "You cannot disconnect your only sign-in method. Connect another provider"

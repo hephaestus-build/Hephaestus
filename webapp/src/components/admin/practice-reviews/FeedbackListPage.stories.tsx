@@ -1,8 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, waitFor, within } from "storybook/test";
 
-import { parseSearch } from "@/lib/router-search";
-
 import type { ReviewFeedback } from "@/api/types.gen";
 import type { FacetSource } from "@/components/common/FacetMultiSelect";
 import type { PagedListState } from "@/runtime/tanstack-query/infinite-list";
@@ -14,33 +12,16 @@ import { StatefulPatch } from "@/stories/stateful";
 
 import { FeedbackListPage } from "./FeedbackListPage";
 import {
-	locationCounts,
 	manyFeedback,
 	practiceGroups,
-	reviewAccounts,
 	reviewFeedback,
 	selects,
-	workspaceMembers,
 	workspacePractices,
 } from "./fixtures";
 import { practiceFacetOptions } from "./ResultFilters";
 import { type FeedbackSearch, feedbackQuery, REVIEW_PAGE_SIZE } from "./review-search";
-import type { ReviewPeople } from "./ReviewPersonFacet";
 import { STORY_GROUPS } from "./story-scope-sources";
 
-const GRACE_ID = reviewAccounts.grace.id;
-
-const PEOPLE: ReviewPeople = {
-	options: workspaceMembers.map(({ account }) => ({
-		accountId: account.id,
-		label: account.displayName ?? `#${account.id}`,
-		secondary: account.identities[0]?.login ?? undefined,
-	})),
-	capped: false,
-	named: true,
-	isLoading: false,
-	isError: false,
-};
 const PRACTICES: FacetSource = {
 	options: practiceFacetOptions(workspacePractices, practiceGroups),
 	isLoading: false,
@@ -79,8 +60,7 @@ function feedbackPage(
 			selects(query.state, row.state) &&
 			selects(query.destination, row.destination) &&
 			(query.location === undefined || row.location === query.location) &&
-			selects(query.stopReason, row.stopReason) &&
-			(query.personId === undefined || row.person?.accountId === query.personId),
+			selects(query.stopReason, row.stopReason),
 		REVIEW_PAGE_SIZE,
 	);
 }
@@ -94,7 +74,6 @@ const meta = {
 	decorators: [withWidePage, withStandardPage],
 	tags: ["autodocs"],
 	args: {
-		workspaceSlug: "demo",
 		search: {
 			state: undefined,
 			destination: undefined,
@@ -105,8 +84,6 @@ const meta = {
 		feedback: pool(reviewFeedback),
 		groups: STORY_GROUPS,
 		practices: PRACTICES,
-		people: PEOPLE,
-		developerCounts: { status: "ready", counts: [] },
 	},
 	// The screen is controlled: with a frozen `search` prop every facet reads as dead. The rows are
 	// recomputed from that search the way the route's query would be re-run.
@@ -121,18 +98,6 @@ const meta = {
 						onSearchChange(patch);
 					}}
 					feedback={feedbackPage(args.feedback, search)}
-					developerCounts={
-						args.developerCounts.status === "ready"
-							? {
-									status: "ready",
-									counts: locationCounts(
-										(args.feedback.status === "ready" ? args.feedback.rows : []).filter(
-											(row) => row.person?.accountId === search.developerId,
-										),
-									),
-								}
-							: args.developerCounts
-					}
 				/>
 			)}
 		</StatefulPatch>
@@ -159,7 +124,7 @@ export const Default: Story = {
 		// The same order as on every tab: the scope, which applies to every tab, with the time order
 		// after its date, then this list's own facets, all in one row.
 		const scope = canvas.getByRole("group", { name: "Applies to every tab" });
-		await expect(comboboxes(scope).slice(0, 3)).toStrictEqual(["Developer", "Group", "Practice"]);
+		await expect(comboboxes(scope).slice(0, 2)).toStrictEqual(["Group", "Practice"]);
 		within(scope).getByRole("button", { name: "Composed" });
 		within(scope).getByRole("combobox", { name: /Sort/u });
 		const filters = canvas.getByRole("group", { name: "Filters" });
@@ -178,16 +143,10 @@ export const Default: Story = {
  * read on its sheet.
  */
 /**
- * While the workspace shows admins results without names, feedback on a practice page or in a
- * conversation names nobody. Feedback on the work keeps its developer: it is posted to them there.
+ * Feedback on a practice page or in a conversation names nobody to staff. Feedback on the work keeps
+ * its developer: it is posted to them there, as the work names them.
  */
-export const WithoutNames: Story = {
-	args: {
-		people: { ...PEOPLE, named: false },
-		feedback: pool(
-			reviewFeedback.map((row) => (row.destination === "ON_WORK" ? row : { ...row, person: null })),
-		),
-	},
+export const OnlyFeedbackOnTheWorkNamesItsDeveloper: Story = {
 	play: async ({ canvas }) => {
 		await canvas.findByText("21 pieces of feedback.");
 		await expect(canvas.queryByRole("combobox", { name: "Developer" })).toBeNull();
@@ -201,62 +160,6 @@ export const LongFeedbackReadsAsProse: Story = {
 		await canvas.findAllByRole("link", { name: /^Open feedback /u });
 		await expect(canvas.queryByText(/2 issues to tighten in this change/u)).not.toBeInTheDocument();
 		await expect(canvas.queryByText(/```java/u)).not.toBeInTheDocument();
-	},
-};
-
-export const FilterToOneDeveloper: Story = {
-	parameters: { chromatic: { viewports: [1440] } },
-	play: async ({ canvas, userEvent }) => {
-		await canvas.findByText("21 pieces of feedback.");
-		await userEvent.click(canvas.getByRole("combobox", { name: "Developer" }));
-		const listbox = await screen.findByRole("listbox");
-		await userEvent.click(
-			await within(listbox).findByRole("option", { name: /Katherine Johnson/u }),
-		);
-		await canvas.findByRole("combobox", { name: "Developer: Katherine Johnson" });
-		await canvas.findByText("5 pieces of feedback match your filters.");
-		await canvas.findByRole("heading", { name: "Feedback for Katherine Johnson" });
-	},
-};
-
-export const DeveloperSummary: Story = {
-	args: {
-		search: {
-			state: undefined,
-			destination: undefined,
-			withheldFamily: undefined,
-			location: undefined,
-			developerId: GRACE_ID,
-		},
-	},
-	parameters: { chromatic: { viewports: [320, 1440] } },
-	play: async ({ canvas }) => {
-		await canvas.findByRole("heading", { name: "Feedback for Grace Hopper" });
-		const table = canvas.getByRole("table", { name: "Feedback for Grace Hopper by where it goes" });
-		await expect(within(table).getByRole("cell", { name: "In conversation" })).toBeVisible();
-		const [count] = within(table).getAllByRole("link");
-		await expect(
-			parseSearch(new URL(String(count?.getAttribute("href")), window.location.origin).search),
-		).toMatchObject({ developerId: "9", location: "CONVERSATION" });
-	},
-};
-
-/** The summary waits in its shape, and says so when the counts fail, without hiding the rows. */
-export const DeveloperSummaryFailed: Story = {
-	args: {
-		search: {
-			state: undefined,
-			destination: undefined,
-			withheldFamily: undefined,
-			location: undefined,
-			developerId: GRACE_ID,
-		},
-		developerCounts: { status: "error", error: { status: 500 }, onRetry: fn() },
-	},
-	parameters: { chromatic: { viewports: [1440] } },
-	play: async ({ canvas }) => {
-		await canvas.findByText("We could not count the feedback for Grace Hopper");
-		await canvas.findByText(/pieces? of feedback match/u);
 	},
 };
 

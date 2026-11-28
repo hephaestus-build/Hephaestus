@@ -46,15 +46,9 @@ public final class SecurityUtils {
      * for APP_ADMIN accounts (see {@code JwtPrincipalFactory}) — deliberately distinct from the
      * per-workspace {@code admin} role, which is membership-derived and never appears in the JWT.
      *
-     * <p>False during a read-only user view: that request carries the viewed member's workspace roles, and
-     * instance-admin elevation would replace them with the administrator's.
-     *
-     * @return true if the current user has the {@code app_admin} authority and is not viewing as another user
+     * @return true if the current user has the {@code app_admin} authority
      */
     public static boolean isSuperAdmin() {
-        if (UserViewContextHolder.get() != null) {
-            return false;
-        }
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
             return false;

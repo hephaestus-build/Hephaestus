@@ -95,7 +95,7 @@ const postgres = `${runId}-postgres`;
 // The provider recorder runs the drill's own TypeScript (`scripts/lib`) on the Node image of the capacity fixture.
 const recorder = `${runId}-providers`;
 const RECORDER_IMAGE =
-	"node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d";
+	"node:24.22.3-trixie-slim@sha256:4d00acb4bcc42c454c4eb801526f7ad7f772ea3bd4fd168c5cc2e384abcbb9d4";
 const recorderFiles = mkdtempSync(nodePath.join(tmpdir(), "hephaestus-upgrade-providers-"));
 const RECORDER_CA = "/etc/hephaestus/upgrade-drill-ca.crt";
 /** The recorder's CA on this host, once `startRecorder` wrote it. */

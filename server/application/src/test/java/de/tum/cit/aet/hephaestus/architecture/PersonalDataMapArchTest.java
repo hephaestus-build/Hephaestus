@@ -77,6 +77,8 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
      * {@code pull_request_requested_reviewers} carry a {@code user_id} and are mapped.
      */
     private static final Set<String> NOT_PERSONAL_DATA = Set.of(
+            // A team, a repository item and a time. The admin audit, not this table, records who mapped it.
+            "project_team_repository",
             // Scoped authorization reference, no provider identifier or local person; workspace purge cascades it.
             "connection_provider_repair",
             // The queue points at a commit and holds no email and no user.
@@ -120,6 +122,8 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "llm_model",
             "llm_model_price",
             "llm_model_workspace_grant",
+            // The instance model of each personal tier: configuration, no person.
+            "personal_model_assignment",
             "login_provider",
             "item", // Technical source references; personal proof is stored in the mapped result tables.
             "practice",
@@ -128,6 +132,10 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "review_practice",
             "catalog_entry",
             "practice_group",
+            // Configuration of reviews: practices, item kind, audience and budget, with no person.
+            "review_setup",
+            "review_setup_practice",
+            "review_setup_team",
             "workspace_practice_repository", // A repository item id and a directory.
             "review_scope_repository",
             "pull_request_closing_issue",
@@ -154,15 +162,61 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
      * rollout. Nothing writes these tables before the registration release, so they are empty and an erasure that skips
      * them loses nothing. The release that registers a table's store removes its entry.
      */
-    private static final Map<String, String> REGISTERED_NEXT_RELEASE = Map.of(
-            "practice_advice",
-            "Advice entries (ADR 0160). Advice writes come only in a release after the registration",
-            "practice_advice_revision",
-            "Advice revisions (ADR 0160). Advice writes come only in a release after the registration",
-            "practice_advice_source",
-            "Advice sources (ADR 0160). Advice writes come only in a release after the registration",
-            "slack_dm_producer_pin",
-            "Slack DM producer pins stay empty until the erasure inventory registers the store");
+    private static final Map<String, String> REGISTERED_NEXT_RELEASE = Map.ofEntries(
+            Map.entry(
+                    "practice_advice",
+                    "Advice entries (ADR 0160). Advice writes come only in a release after the registration"),
+            Map.entry(
+                    "practice_advice_revision",
+                    "Advice revisions (ADR 0160). Advice writes come only in a release after the registration"),
+            Map.entry(
+                    "practice_advice_source",
+                    "Advice sources (ADR 0160). Advice writes come only in a release after the registration"),
+            Map.entry(
+                    "practice_advice_receipt",
+                    "One advice decision per review, by the entry's owner key (ADR 0160). Deleted with its entry"),
+            Map.entry(
+                    "mentor_event",
+                    "Mentor intake (ADR 0158). Intake writes come only in a release after the registration"),
+            Map.entry(
+                    "mentor_request",
+                    "Mentor intake (ADR 0158). Intake writes come only in a release after the registration"),
+            Map.entry(
+                    "mentor_source",
+                    "Mentor intake (ADR 0158). Intake writes come only in a release after the registration"),
+            Map.entry(
+                    "project_team",
+                    "Project teams (ADR 0165). Team writes come only in a release after the registration"),
+            Map.entry(
+                    "project_team_member",
+                    "Project team members (ADR 0165). Membership writes come only in a release after the registration"),
+            Map.entry(
+                    "host_grant",
+                    "Host team grants (ADR 0166). Grant writes come only in a release after the registration"),
+            Map.entry(
+                    "host_pairing",
+                    "Host pairing requests (ADR 0166). Pairing writes come only in a release after the registration"),
+            Map.entry(
+                    "team_item",
+                    "Submitted team items (ADR 0165). Item writes come only in a release after the registration"),
+            Map.entry(
+                    "team_item_version",
+                    "Submitted team versions (ADR 0165). Version writes come only in a release after the registration"),
+            Map.entry(
+                    "team_snapshot",
+                    "Submitted team content (ADR 0165). Snapshot writes come only in a release after the registration"),
+            Map.entry(
+                    "slack_dm_producer_pin",
+                    "Slack DM producer pins stay empty until the erasure inventory registers the store"));
+
+    /**
+     * Personal tables that only the account purge erases, because no erasure inventory names their store yet (ADR 0164).
+     * Each entry names that erasure and the issue that registers the store.
+     */
+    private static final Map<String, String> PURGED_WITH_THE_ACCOUNT = Map.of(
+            "support_share",
+            "ConversationPersonDataCatalog.eraseAccount deletes the person's shares and the shares addressed to them;"
+                    + " #5364");
 
     /** Closed list of personal data retained for security: every addition requires an accepted ADR. */
     private static final Map<String, SecurityRetention> SECURITY_RETENTION = Map.of(
@@ -355,6 +409,10 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
         assertThat(withoutRuntimeStore(REGISTERED_NEXT_RELEASE.keySet(), registry.stores()))
                 .as("a table that a registered store erases leaves REGISTERED_NEXT_RELEASE")
                 .containsExactlyInAnyOrderElementsOf(REGISTERED_NEXT_RELEASE.keySet());
+        // Such a table goes with the account purge until its store joins the erasure inventory.
+        required.removeAll(PURGED_WITH_THE_ACCOUNT.keySet());
+        assertThat(accountErasure.stream().flatMap(contributor -> declared(contributor).stream()))
+                .contains("support_share.account_id", "support_share.recipient_account_id");
         assertThat(declared)
                 .as("every personal table must have a full contributor, not an operator path")
                 .containsAll(required);

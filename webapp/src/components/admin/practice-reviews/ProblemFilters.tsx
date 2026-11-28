@@ -13,7 +13,6 @@ import {
 import { clearedScopeFilters, hasAppliedScope, readScope } from "./review-scope";
 import type { ProblemsSearch } from "./review-search";
 import { ReviewFilterBar } from "./ReviewFilterBar";
-import type { ReviewPeople } from "./ReviewPersonFacet";
 import type { ScopeRecordFilter } from "./ReviewScopeFilters";
 
 const SEVERITY_OPTIONS = statusFacetOptions(SEVERITY_DEFS);
@@ -51,10 +50,8 @@ export interface ProblemFiltersProps {
 	onClearScope: () => void;
 	groups: FacetSource;
 	practices: FacetSource<PracticeFacetOption>;
-	people: ReviewPeople;
 	total: number | undefined;
 	record?: ScopeRecordFilter;
-	subjectName?: string;
 }
 
 export function ProblemFilters({
@@ -64,10 +61,8 @@ export function ProblemFilters({
 	onClearScope,
 	groups,
 	practices,
-	people,
 	total,
 	record,
-	subjectName,
 }: ProblemFiltersProps) {
 	const severity = listFacet("Severity", SEVERITY_OPTIONS, search.severity, (values) =>
 		onPatch({ severity: nonEmpty(values) }),
@@ -82,8 +77,6 @@ export function ProblemFilters({
 			dateTitle="Recorded"
 			groups={groups}
 			practices={practices}
-			people={people}
-			personName={subjectName}
 			record={record}
 			facets={
 				<>

@@ -19,7 +19,6 @@ import org.springframework.validation.annotation.Validated;
  *   <li>{@code GET /oauth2/authorization/*} — keyed by client IP</li>
  *   <li>{@code POST /auth/refresh} — keyed by account (JWT sub; IP fallback)</li>
  *   <li>{@code POST /auth/client/token|refresh|logout} — keyed by client IP</li>
- *   <li>User-view selection and normal-app reads — keyed by admin account</li>
  *   <li>{@code DELETE /user} — keyed by account</li>
  *   <li>{@code POST /user/exports} — keyed by account</li>
  *   <li>{@code GET /public/usage} and {@code GET /public/usage/*} — keyed by client IP</li>
@@ -45,7 +44,6 @@ public record AuthRateLimitProperties(
         @Valid @NotNull Limit oauthAuthorization,
         @Valid @NotNull Limit refresh,
         @Valid @NotNull Limit clientSession,
-        @Valid @NotNull Limit userView,
         @Valid @NotNull Limit deleteUser,
         @Valid @NotNull Limit export,
         @Valid @NotNull Limit conversationTurns,

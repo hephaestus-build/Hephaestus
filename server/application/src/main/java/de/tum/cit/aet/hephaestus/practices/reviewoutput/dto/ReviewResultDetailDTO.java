@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewBoundFeedbackDTO;
 import de.tum.cit.aet.hephaestus.practices.result.dto.ProblemDTO;
 import de.tum.cit.aet.hephaestus.practices.result.dto.ResultEvidenceDTO;
 import de.tum.cit.aet.hephaestus.practices.result.dto.ResultExampleDTO;
-import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewPersonDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
@@ -88,9 +87,6 @@ public record ReviewResultDetailDTO(
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
         ResultEndReason endReason,
-
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
-        ReviewPersonDTO person,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int evidenceVersion,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean evidenceHidden,

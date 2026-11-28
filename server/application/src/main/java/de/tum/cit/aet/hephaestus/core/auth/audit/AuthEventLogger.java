@@ -29,8 +29,6 @@ public class AuthEventLogger {
         private final AuthEvent.EventType type;
         private final AuthEvent.Result result;
         private @Nullable Long accountId;
-        private @Nullable Long viewedActorId;
-        private @Nullable Long viewedAccountId;
         private @Nullable Long actingAccountId;
         private @Nullable String failureReason;
         private @Nullable Long gitProviderId;
@@ -41,16 +39,6 @@ public class AuthEventLogger {
         private Draft(AuthEvent.EventType type, AuthEvent.Result result) {
             this.type = type;
             this.result = result;
-        }
-
-        public Draft viewedAccount(@Nullable Long id) {
-            this.viewedAccountId = id;
-            return this;
-        }
-
-        public Draft viewedActor(@Nullable Long id) {
-            this.viewedActorId = id;
-            return this;
         }
 
         public Draft account(@Nullable Long id) {
@@ -110,8 +98,9 @@ public class AuthEventLogger {
                         type,
                         result,
                         accountId,
-                        viewedActorId,
-                        viewedAccountId,
+                        // Only the removed View as user wrote these; its earlier rows keep them.
+                        null,
+                        null,
                         actingAccountId,
                         failureReason,
                         gitProviderId,

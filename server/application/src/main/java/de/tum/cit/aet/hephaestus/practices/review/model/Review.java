@@ -1,10 +1,12 @@
 package de.tum.cit.aet.hephaestus.practices.review.model;
 
 import de.tum.cit.aet.hephaestus.practices.spi.RawObservationAccess;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAudience;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewVersionKind;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -137,6 +139,30 @@ public class Review {
 
     @Column(name = "request_digest", length = 64)
     private @Nullable String requestDigest;
+
+    /**
+     * The review setup that started this review (ADR 0167 decision 2). Null for a review that no setup started. A
+     * deleted setup leaves the review and its own copy of the setup.
+     *
+     * <p>This field and the three after it are written only with the row: an update never writes them, so a save of a
+     * loaded review neither writes back the setup that its key cleared nor asks the database to admit its team again.
+     */
+    @Column(name = "setup_id", columnDefinition = "UUID", updatable = false)
+    private @Nullable UUID setupId;
+
+    /** What the review pinned, set once at creation. Null on a review from before reviews stored it. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "version_kind", length = 24, updatable = false)
+    private @Nullable ReviewVersionKind versionKind;
+
+    /** Who reads the review, set once at creation (ADR 0167 decision 3). Null on a review from before. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "audience", length = 16, updatable = false)
+    private @Nullable ReviewAudience audience;
+
+    /** The team project of a {@code TEAM} audience, and of no other. */
+    @Column(name = "audience_team_id", columnDefinition = "UUID", updatable = false)
+    private @Nullable UUID audienceTeamId;
 
     /** Someone asked to cancel the review; it ends CANCELLED once no invocation of it runs. */
     @Default

@@ -46,8 +46,6 @@ export interface OutcomeScope {
 	from?: string;
 	to?: string;
 	practiceSlug?: string;
-	/** The developer feedback is addressed to. Only feedback counts carry it. */
-	developerId?: string;
 }
 
 /**
@@ -87,7 +85,7 @@ export function reviewSlots(counts: ReviewStatusCounts, scope?: OutcomeScope): O
 		count: counts[REVIEW_COUNT[status]],
 		target: scope && {
 			list: "reviews",
-			search: { ...scopeSearch(scope, "reviews"), status: [status] },
+			search: { ...scopeSearch(scope), status: [status] },
 		},
 	}));
 }
@@ -111,7 +109,7 @@ export function finishedCount(counts: ReviewStatusCounts): number {
 }
 
 export function resultSlots(counts: ReviewResultCounts, scope?: OutcomeScope): OutcomeSlot[] {
-	const search = scope && scopeSearch(scope, "results");
+	const search = scope && scopeSearch(scope);
 	return [
 		{
 			key: "met",
@@ -148,7 +146,7 @@ export function markedIncorrectSlot(count: number, scope?: OutcomeScope): Outcom
 		count,
 		target: scope && {
 			list: "results",
-			search: { ...scopeSearch(scope, "results"), markedIncorrect: true },
+			search: { ...scopeSearch(scope), markedIncorrect: true },
 		},
 	};
 }
@@ -186,7 +184,7 @@ export function feedbackSlots(counts: ReviewFeedbackCounts, scope?: OutcomeScope
 		target: scope && {
 			list: "feedback",
 			search: {
-				...scopeSearch(scope, "feedback"),
+				...scopeSearch(scope),
 				state: [...DELIVERY_FAMILY_STATES[family]],
 			},
 		},
@@ -200,7 +198,7 @@ export function overviewFeedbackSlots(
 	const search = (state: KnownDeliveryState[]): ReviewListTarget | undefined =>
 		scope && {
 			list: "feedback",
-			search: { ...scopeSearch(scope, "feedback"), state },
+			search: { ...scopeSearch(scope), state },
 		};
 	const slots = feedbackSlots(counts, scope).map((slot): OutcomeSlot => {
 		if (slot.key !== "WITHHELD") {
@@ -236,12 +234,10 @@ export function rangeScope(from: Date, nowMs: number): OutcomeScope {
 
 export function scopeSearch(
 	scope: OutcomeScope,
-	list: ReviewListTarget["list"],
-): Pick<FeedbackSearch, "from" | "to" | "practiceSlug" | "developerId"> {
+): Pick<FeedbackSearch, "from" | "to" | "practiceSlug"> {
 	return {
 		from: scope.from,
 		to: scope.to,
 		practiceSlug: scope.practiceSlug === undefined ? undefined : [scope.practiceSlug],
-		developerId: list === "feedback" ? scope.developerId : undefined,
 	};
 }

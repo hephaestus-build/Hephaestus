@@ -1,0 +1,16 @@
+{
+	"name": "figma-plugin",
+	"version": "0.0.0-development",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "node build.ts",
+		"test": "node --test 'src/**/*.test.ts'"
+	},
+	"devDependencies": {
+		"@figma/plugin-typings": "1.143.0",
+		"@types/node": "24.19.2",
+		"typescript": "catalog:",
+		"vite": "catalog:"
+	}
+}
