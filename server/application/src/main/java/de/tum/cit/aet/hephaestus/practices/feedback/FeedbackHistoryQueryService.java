@@ -356,6 +356,17 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
                     threads.put(thread.getFeedbackId(), thread.getConversationId());
                     if (thread.getWords() != null) shownWords.put(thread.getFeedbackId(), thread.getWords());
                 });
+                // The 1.0 upgrade brought a 0.x receipt over with its words and without its answer or write fence:
+                // its copy is the only home of those words. A receipt of this release always has a write fence.
+                for (var row : ownConversation)
+                    copiesOf.getOrDefault(row.getId(), List.of()).stream()
+                            .filter(copy -> copy.getKind() == FeedbackCopyKind.CHAT_TURN
+                                    && copy.getPostedAt() != null
+                                    && copy.getConversationEntryId() == null
+                                    && copy.getWriteStartedAt() == null
+                                    && copy.getBody() != null)
+                            .findFirst()
+                            .ifPresent(copy -> shownWords.putIfAbsent(row.getId(), copy.getBody()));
             }
         }
 

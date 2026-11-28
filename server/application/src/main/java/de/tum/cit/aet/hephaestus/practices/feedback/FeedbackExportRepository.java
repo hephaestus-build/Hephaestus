@@ -30,15 +30,16 @@ public interface FeedbackExportRepository extends Repository<Feedback, UUID> {
 
     /**
      * The posted pieces of these feedback rows, in order. A conversation receipt's words are read from its answer
-     * ({@code conversation_receipt_words}), never from the copy, so a redacted answer shows none.
+     * ({@code conversation_receipt_words}), never from the copy, so a redacted answer shows none. A receipt that the 1.0
+     * upgrade brought from 0.x has no answer and no write fence: its copy is the only home of its words.
      */
     @WorkspaceAgnostic("The self-service export reads the account's own feedback in every workspace")
     @Query(value = """
         SELECT c.feedback_id AS feedbackId, c.kind AS kind, c.path AS path, c.start_line AS startLine,
           c.end_line AS endLine,
-          CASE WHEN c.kind='CHAT_TURN'
-            THEN conversation_receipt_words(c.workspace_id,c.feedback_id,c.conversation_entry_id,c.conversation_turn_id)
-            ELSE c.body END AS body,
+          CASE WHEN c.kind<>'CHAT_TURN' OR (c.conversation_entry_id IS NULL AND c.write_started_at IS NULL) THEN c.body
+            ELSE conversation_receipt_words(c.workspace_id,c.feedback_id,c.conversation_entry_id,c.conversation_turn_id)
+            END AS body,
           c.posted_at AS postedAt
         FROM feedback_copy c JOIN feedback f ON f.id=c.feedback_id AND f.workspace_id=c.workspace_id
         WHERE f.person_account_id=:accountId AND c.feedback_id IN (:feedbackIds)
