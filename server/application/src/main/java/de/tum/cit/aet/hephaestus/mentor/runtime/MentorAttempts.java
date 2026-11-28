@@ -41,6 +41,8 @@ public class MentorAttempts {
      */
     @Transactional
     public List<AttemptLease> claim(long account, WorkClass workClass, int limit, Duration lease) {
+        // A lease that is already over would spend one of the attempt's claims on nothing.
+        if (!lease.isPositive()) throw new IllegalArgumentException("A lease must last: " + lease);
         if (limit <= 0 || !fence.holdForAccountWrite(account)) return List.of();
         owners.ofJob(account);
         if (attempts.lockOwnerOrSkip(account).isEmpty()) return List.of();

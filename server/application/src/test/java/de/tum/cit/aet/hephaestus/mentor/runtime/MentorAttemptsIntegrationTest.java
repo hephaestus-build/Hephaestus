@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.mentor.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -153,6 +154,25 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
         for (int claim = 1; claim <= MentorAttempt.MAX_CLAIMS; claim++) lapse(claimOne(WorkClass.INTERACTIVE));
 
         assertThat(claim(WorkClass.INTERACTIVE, 1)).isEmpty();
+    }
+
+    @Test
+    void shouldRefuseAClaimWhoseLeaseWouldAlreadyBeOver() {
+        assertThatThrownBy(() -> attempts.claim(account, WorkClass.INTERACTIVE, 1, Duration.ZERO))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    /** A claim with room left never takes a lease that still runs. */
+    @Test
+    void shouldSkipALiveLeaseWhenTheAccountHasRoomForAnother() {
+        UUID request = ask(message());
+        AttemptLease held = claimOne(WorkClass.INTERACTIVE);
+
+        assertThat(claim(WorkClass.INTERACTIVE, 2)).isEmpty();
+        assertThat(attempt(request))
+                .containsEntry("claims", 1)
+                .containsEntry("lease_epoch", held.leaseEpoch())
+                .containsEntry("lease_token", held.leaseToken());
     }
 
     /** A newer version replaces the older attempt: the next claim ends it unless a lease still holds it. */
