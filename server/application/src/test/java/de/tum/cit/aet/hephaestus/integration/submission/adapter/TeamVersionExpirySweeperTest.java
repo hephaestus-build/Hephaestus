@@ -44,6 +44,7 @@ class TeamVersionExpirySweeperTest extends BaseUnitTest {
 
     @Test
     void shouldStartNoBatchAfterTheBudgetAndRecordThatWorkRemains() {
+        when(versions.existsDue()).thenReturn(true);
         when(versions.expireDue(TeamVersionExpirySweeper.BATCH)).thenAnswer(invocation -> {
             clock.advance(Duration.ofMinutes(1));
             return TeamVersionExpirySweeper.BATCH;
@@ -69,6 +70,17 @@ class TeamVersionExpirySweeperTest extends BaseUnitTest {
 
         assertThat(remaining.get()).isZero();
         assertThat(runs("success")).isOne();
+    }
+
+    @Test
+    void shouldRecordThatWorkRemainsWhenAShortBatchLeavesADueVersion() {
+        when(versions.expireDue(TeamVersionExpirySweeper.BATCH)).thenReturn(1);
+        when(versions.existsDue()).thenReturn(true);
+
+        sweeper.sweep();
+
+        assertThat(runs("incomplete")).isOne();
+        assertThat(runs("success")).isZero();
     }
 
     @Test

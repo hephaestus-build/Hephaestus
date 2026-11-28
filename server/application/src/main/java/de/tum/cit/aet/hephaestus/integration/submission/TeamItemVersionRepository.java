@@ -26,6 +26,14 @@ public interface TeamItemVersionRepository extends Repository<TeamItemVersion, U
                     """, nativeQuery = true)
     int expireDue(@Param("limit") int limit);
 
+    /** Whether a version is still available although its expiry date passed, by the database clock. */
+    @WorkspaceAgnostic("Expiry spans workspaces")
+    @Query(
+            value = "SELECT EXISTS (SELECT 1 FROM team_item_version"
+                    + " WHERE state = 'AVAILABLE' AND expires_at <= now())",
+            nativeQuery = true)
+    boolean existsDue();
+
     /** Ends every version of the account, whatever its state, and removes the account and the title from it. */
     @WorkspaceAgnostic("Account erasure spans workspaces")
     @Modifying

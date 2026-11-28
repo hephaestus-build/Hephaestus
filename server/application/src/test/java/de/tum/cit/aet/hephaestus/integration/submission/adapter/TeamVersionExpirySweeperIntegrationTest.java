@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -45,6 +46,9 @@ class TeamVersionExpirySweeperIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private TeamVersionExpirySweeper sweeper;
+
+    @Autowired
+    private MeterRegistry meters;
 
     private Workspace course;
     private long student;
@@ -109,6 +113,7 @@ class TeamVersionExpirySweeperIntegrationTest extends BaseIntegrationTest {
     void shouldSkipAVersionThatAnotherTransactionHoldsAndEndItInALaterRun() {
         UUID held = submitted("-1 minute");
         UUID free = submitted("-1 minute");
+        double incomplete = runs("incomplete");
 
         transactions.executeWithoutResult(status -> {
             jdbc.queryForList(
@@ -123,10 +128,20 @@ class TeamVersionExpirySweeperIntegrationTest extends BaseIntegrationTest {
 
         assertThat(state(free)).isEqualTo("EXPIRED");
         assertThat(state(held)).isEqualTo("AVAILABLE");
+        assertThat(runs("incomplete")).isEqualTo(incomplete + 1);
+        double success = runs("success");
 
         sweeper.sweepNow();
 
         assertThat(state(held)).isEqualTo("EXPIRED");
+        assertThat(runs("success")).isEqualTo(success + 1);
+    }
+
+    private double runs(String outcome) {
+        return meters.get("privacy.job.completed")
+                .tags("job", "team_version_expiry", "outcome", outcome)
+                .counter()
+                .count();
     }
 
     private long workspace() {

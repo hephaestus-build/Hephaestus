@@ -18,7 +18,8 @@ import org.springframework.stereotype.Component;
 /**
  * Hourly sweep that ends each submitted version whose expiry date passed; the database then deletes its content
  * (ADR 0165). Each batch commits on its own, so a failure keeps the batches before it. A run calls again while a batch
- * is full, for at most {@link #BUDGET}; what it leaves, and the versions it skipped, the next run ends.
+ * is full, for at most {@link #BUDGET}; what it leaves, and the versions it skipped, the next run ends. A run that
+ * leaves a due version is incomplete.
  */
 @Component
 @ConditionalOnServerRole
@@ -59,8 +60,8 @@ class TeamVersionExpirySweeper {
                 batch = versions.expireDue(BATCH);
                 expired += batch;
             } while (batch == BATCH && clock.instant().isBefore(deadline));
-            // A full last batch means that due versions may remain for the next run.
-            metrics.record(Job.TEAM_VERSION_EXPIRY, batch == BATCH ? Outcome.INCOMPLETE : Outcome.SUCCESS);
+            // Asked, not inferred from the batches: a held version is skipped, and a full last batch may drain all.
+            metrics.record(Job.TEAM_VERSION_EXPIRY, versions.existsDue() ? Outcome.INCOMPLETE : Outcome.SUCCESS);
             metrics.recordAffected(Job.TEAM_VERSION_EXPIRY, expired);
             if (expired > 0) {
                 log.info("team.expiry: ended {} version(s) past their expiry date", expired);

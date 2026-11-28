@@ -424,6 +424,9 @@ An empty backlog is a `success`.
 `HephaestusPrivacyJobFailing` reports a job that failed or left work at least twice in 26 hours.
 `incomplete` means the run ended without error but exhausted its time budget while eligible work remained.
 
+For `team_version_expiry`, `incomplete` means that a version is still past its expiry date after the run.
+The run spent its time budget, or another transaction held the version.
+
 For `conversation_retention` and `conversation_copy_retention`, `incomplete` means instead that the erasure of one person's entries failed.
 For `conversation_copy_retention`, it can also mean that the tool results of one workspace could not be read.
 A run of either without a failed erasure that spends its budget is a `success`, because the next run continues 15 minutes later.
