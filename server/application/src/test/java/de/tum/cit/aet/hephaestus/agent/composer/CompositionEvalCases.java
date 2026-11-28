@@ -781,7 +781,8 @@ final class CompositionEvalCases {
     private static Set<String> supportedItems(JsonNode response) {
         var items = new HashSet<String>();
         for (JsonNode practice : response.path("practicePageSupport").path("practices"))
-            for (JsonNode occurrence : practice.path("occurrences")) items.add(occurrence.path("itemId").asString());
+            for (JsonNode occurrence : practice.path("occurrences"))
+                items.add(occurrence.path("itemId").asString());
         return items.isEmpty() ? Set.of() : Set.of(Integer.toString(items.size()));
     }
 

@@ -235,9 +235,7 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
         when(earlier.itemId()).thenReturn(6L);
         var trace = new FeedbackCompositionTrace(
                 List.of(new FeedbackCompositionTrace.CopySupport(
-                        FeedbackCopyKind.SUMMARY,
-                        0,
-                        List.of(new FeedbackCompositionTrace.Support(current, null)))),
+                        FeedbackCopyKind.SUMMARY, 0, List.of(new FeedbackCompositionTrace.Support(current, null)))),
                 List.of(),
                 null,
                 current);

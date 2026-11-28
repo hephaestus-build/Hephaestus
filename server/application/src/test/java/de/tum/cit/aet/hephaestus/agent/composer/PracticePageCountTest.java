@@ -51,8 +51,7 @@ class PracticePageCountTest extends BaseUnitTest {
                 .filter(each -> each.id().equals("gh-a-01-menu-view-does-its-own-networking/PRACTICE_PAGE/2"))
                 .findFirst()
                 .orElseThrow();
-        String current =
-                two.admission().results().get(0).path("resultId").asString();
+        String current = two.admission().results().get(0).path("resultId").asString();
         String prior = Objects.requireNonNull(two.admission().practicePageSupport())
                 .path("practices")
                 .get(0)
@@ -95,8 +94,8 @@ class PracticePageCountTest extends BaseUnitTest {
         lenient().when(earlier.practiceId()).thenReturn(31L);
         lenient().when(earlier.itemId()).thenReturn(6L);
         var admitted = List.of(new AdmittedResultSnapshot(UUID.fromString(current), candidate, List.of()));
-        return () -> FeedbackDraftBuilder.build(
-                RuntimeReviewTestData.job(), request, admitted, List.of(earlier), Map.of());
+        return () ->
+                FeedbackDraftBuilder.build(RuntimeReviewTestData.job(), request, admitted, List.of(earlier), Map.of());
     }
 
     private static PrivateFeedback.Draft draft(CompositionEvalCases.PrivateScenario scenario) {

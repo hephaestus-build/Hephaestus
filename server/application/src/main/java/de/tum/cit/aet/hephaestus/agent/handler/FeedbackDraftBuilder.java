@@ -228,7 +228,8 @@ public final class FeedbackDraftBuilder {
         var items = new HashSet<Long>();
         rows.forEach(row -> items.add(row.candidate().itemId()));
         history.stream()
-                .filter(entry -> entry.practiceId() == practice && Objects.equals(entry.developerAccountId(), developer))
+                .filter(entry ->
+                        entry.practiceId() == practice && Objects.equals(entry.developerAccountId(), developer))
                 .forEach(entry -> items.add(entry.itemId()));
         return Set.of(Integer.toString(items.size()));
     }

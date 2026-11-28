@@ -194,7 +194,9 @@ public final class FeedbackTextPolicy {
      * one that", "add one"), and "one of 17" still states 17.
      */
     private static Set<String> statedCounts(String prose) {
-        return NumberWords.counts(NumberWords.words(ITEM_REFERENCE.matcher(prose).replaceAll(" "))).stream()
+        return NumberWords.counts(
+                        NumberWords.words(ITEM_REFERENCE.matcher(prose).replaceAll(" ")))
+                .stream()
                 .filter(count -> !count.equals("one"))
                 .map(NumberWords::value)
                 .collect(Collectors.toUnmodifiableSet());
