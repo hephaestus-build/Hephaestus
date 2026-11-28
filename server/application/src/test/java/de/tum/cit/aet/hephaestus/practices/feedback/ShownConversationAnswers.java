@@ -18,8 +18,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * A completed Hephaestus answer that showed words for a piece of feedback through a successful {@code show_feedback}
  * call, and the posted conversation copy of the piece. The copy names the answer and holds the same words, as a receipt
- * of this release does; readers take them from the answer. The rows are written as the developer of the piece, in the
- * main conversation of the developer.
+ * that a server of the previous release posts while an upgrade rolls; readers take them from the answer. The rows are
+ * written as the developer of the piece, in the main conversation of the developer.
  */
 final class ShownConversationAnswers {
     /** The conversation, the completed turn, the answer that showed the words and its show_feedback result. */

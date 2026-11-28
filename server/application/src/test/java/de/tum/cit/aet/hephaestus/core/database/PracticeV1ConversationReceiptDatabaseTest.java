@@ -37,6 +37,8 @@ class PracticeV1ConversationReceiptDatabaseTest {
                         + "conversation_turn_id='" + FOREIGN_TURN + "' WHERE id='" + COPY + "'",
                 "23514");
         claim(database);
+        // A post without words still needs the shape of a completed write: here no answer is bound.
+        reject(database, receipt(), "55000");
         var digest = PracticeMigrationFixture.column(
                 database, "SELECT feedback_content_digest('00000000-0000-0000-0000-000000998161')");
         reject(
@@ -58,51 +60,52 @@ class PracticeV1ConversationReceiptDatabaseTest {
         reject(database, "UPDATE feedback_copy SET body='Prepared brief.' WHERE id='" + COPY + "'", "55000");
         answer(database);
         // The turn is still running, so its answer is not complete.
-        reject(database, receipt(SHOWN), "23514");
+        reject(database, receipt(), "23514");
         complete(database);
-        reject(database, receipt("'Some context.'"), "23514");
-        // The answer's own words are not the words its show_feedback call showed.
-        reject(database, receipt("E'Some context.\\n\\nActual shown words.'"), "23514");
-        reject(database, receipt("'Prepared brief.'"), "23514");
         // A failed show_feedback call shows nothing.
         PracticeMigrationFixture.execute(
                 database,
                 "UPDATE conversation_entry SET payload=jsonb_set(payload,'{message,isError}','true')" + " WHERE id='"
                         + TOOL_RESULT + "'");
-        reject(database, receipt(SHOWN), "23514");
+        reject(database, receipt(), "23514");
         PracticeMigrationFixture.execute(
                 database,
                 "UPDATE conversation_entry SET payload=jsonb_set(payload,'{message,isError}','false')" + " WHERE id='"
                         + TOOL_RESULT + "'");
+        // A call that shows only blank words shows nothing.
+        showText(database, "   ");
+        reject(database, receipt(), "23514");
+        showText(database, "Actual shown words.");
+        // A post time without the POSTED state is no receipt.
+        reject(database, "UPDATE feedback_copy SET posted_at='2026-02-01T00:01:00Z' WHERE id='" + COPY + "'", "55000");
+        // A server of the previous release posts the shown words with the receipt; it may post no others.
+        reject(database, receiptWithWords("'Different words.'"), "23514");
         reject(
                 database,
-                "UPDATE feedback_copy SET state='POSTED',posted_at='2026-02-01T00:01:00Z'" + " WHERE id='" + COPY + "'",
-                "23514");
-        reject(
-                database,
-                "UPDATE feedback_copy SET state='POSTED',body=" + SHOWN + ","
-                        + "posted_at='2026-01-01T00:01:00Z' WHERE id='" + COPY + "'",
+                "UPDATE feedback_copy SET state='POSTED',posted_at='2026-01-01T00:01:00Z' WHERE id='" + COPY + "'",
                 "55000");
         PracticeMigrationFixture.execute(
                 database, "UPDATE conversation_entry SET redacted_at='2026-02-01T00:00:30Z' WHERE id='" + ANSWER + "'");
-        reject(database, receipt(SHOWN), "23514");
+        reject(database, receipt(), "23514");
         PracticeMigrationFixture.execute(
                 database, "UPDATE conversation_entry SET redacted_at=NULL WHERE id='" + ANSWER + "'");
         // A failed transport can later supply confirmation, without another claim or a new fence.
         PracticeMigrationFixture.execute(database, "UPDATE feedback_copy SET state='FAILED' WHERE id='" + COPY + "'");
-        PracticeMigrationFixture.execute(database, receipt(SHOWN));
+        PracticeMigrationFixture.execute(database, receipt());
         assertThat(PracticeMigrationFixture.column(
                         database,
-                        "SELECT state || '|' || (body=" + SHOWN + ")::text || '|' || conversation_turn_id || '|' ||"
+                        "SELECT state || '|' || (body IS NULL)::text || '|' || conversation_turn_id || '|' ||"
                                 + " conversation_entry_id || '|' ||"
-                                + " (write_started_at='2026-02-01T00:00:00Z'::timestamptz)::text"
-                                + " FROM feedback_copy WHERE id='" + COPY + "'"))
-                .containsExactly("POSTED|true|" + TURN + "|" + ANSWER + "|true");
+                                + " (write_started_at='2026-02-01T00:00:00Z'::timestamptz)::text || '|' ||"
+                                + " conversation_receipt_words(workspace_id,feedback_id,conversation_entry_id,"
+                                + "conversation_turn_id) FROM feedback_copy WHERE id='" + COPY + "'"))
+                .as("the receipt keeps no words; its answer shows them")
+                .containsExactly("POSTED|true|" + TURN + "|" + ANSWER + "|true|Actual shown words.");
         assertThat(PracticeMigrationFixture.column(
                         database, "SELECT feedback_content_digest('00000000-0000-0000-0000-000000998161')"))
                 .isEqualTo(digest);
         reject(database, "UPDATE feedback_copy SET body='Different words.' WHERE id='" + COPY + "'", "55000");
-        reject(database, "UPDATE feedback_copy SET body=NULL WHERE id='" + COPY + "'", "55000");
+        reject(database, receiptWithWords(SHOWN), "55000");
         reject(
                 database,
                 "UPDATE feedback_copy SET write_started_at=write_started_at+interval '1 second'" + " WHERE id='" + COPY
@@ -130,13 +133,13 @@ class PracticeV1ConversationReceiptDatabaseTest {
         complete(database);
         PracticeMigrationFixture.execute(
                 database,
-                "UPDATE feedback_copy SET state='POSTED',posted_at='2026-02-01T00:01:00Z',body=" + SHOWN
-                        + ",conversation_entry_id='" + ANSWER + "' WHERE id='" + COPY + "'");
+                "UPDATE feedback_copy SET state='POSTED',posted_at='2026-02-01T00:01:00Z',conversation_entry_id='"
+                        + ANSWER + "' WHERE id='" + COPY + "'");
         PracticeMigrationFixture.execute(database, "DELETE FROM conversation_entry WHERE id='" + ANSWER + "'");
         assertThat(PracticeMigrationFixture.column(
                         database,
                         "SELECT (conversation_entry_id IS NULL)::text || '|' || conversation_turn_id || '|' || state || '|' ||"
-                                + " (body=" + SHOWN + ")::text || '|' ||"
+                                + " (body IS NULL)::text || '|' ||"
                                 + " (write_started_at IS NOT NULL AND posted_at IS NOT NULL)::text"
                                 + " FROM feedback_copy WHERE id='" + COPY + "'"))
                 .containsExactly("true|" + TURN + "|POSTED|true|true");
@@ -148,7 +151,7 @@ class PracticeV1ConversationReceiptDatabaseTest {
         assertThat(PracticeMigrationFixture.column(
                         database,
                         "SELECT (conversation_entry_id IS NULL AND conversation_turn_id IS NULL)::text || '|' || state || '|' ||"
-                                + " (body=" + SHOWN + ")::text || '|' ||"
+                                + " (body IS NULL)::text || '|' ||"
                                 + " (write_started_at IS NOT NULL AND posted_at IS NOT NULL)::text"
                                 + " FROM feedback_copy WHERE id='" + COPY + "'"))
                 .containsExactly("true|POSTED|true|true");
@@ -176,8 +179,8 @@ class PracticeV1ConversationReceiptDatabaseTest {
         complete(database);
         PracticeMigrationFixture.execute(
                 database,
-                "UPDATE feedback_copy SET state='POSTED',posted_at='2026-02-01T00:01:00Z',body=" + SHOWN
-                        + ",conversation_entry_id='" + ANSWER + "' WHERE id='" + COPY + "'");
+                "UPDATE feedback_copy SET state='POSTED',posted_at='2026-02-01T00:01:00Z',conversation_entry_id='"
+                        + ANSWER + "' WHERE id='" + COPY + "'");
 
         try (var connection =
                 DriverManager.getConnection(database.jdbcUrl(), database.username(), database.password())) {
@@ -193,11 +196,34 @@ class PracticeV1ConversationReceiptDatabaseTest {
         assertThat(PracticeMigrationFixture.column(
                         database,
                         "SELECT (conversation_entry_id IS NULL AND conversation_turn_id IS NULL)::text || '|' || state || '|'"
-                                + " || (body=" + SHOWN + ")::text FROM feedback_copy WHERE id='" + COPY + "'"))
+                                + " || (body IS NULL)::text FROM feedback_copy WHERE id='" + COPY + "'"))
                 .containsExactly("true|POSTED|true");
         assertThat(PracticeMigrationFixture.column(
                         database, "SELECT count(*)::text FROM conversation_turn WHERE workspace_id=978001"))
                 .containsExactly("0");
+    }
+
+    /**
+     * A server of the previous release posts the receipt with the words that its answer shows, while this release
+     * rolls out or after a rollback. The guard admits them, so that server keeps recording deliveries; no reader of
+     * this release reads them (#5504 refuses them later).
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"prod", "dev"})
+    void shouldAdmitTheShownWordsThatAServerOfThePreviousReleasePosts(String context) throws Exception {
+        var database = prepared(context);
+        claim(database);
+        answer(database);
+        complete(database);
+        PracticeMigrationFixture.execute(
+                database,
+                "UPDATE feedback_copy SET state='POSTED',posted_at='2026-02-01T00:01:00Z',body=" + SHOWN
+                        + ",conversation_entry_id='" + ANSWER + "' WHERE id='" + COPY + "'");
+        assertThat(PracticeMigrationFixture.column(
+                        database,
+                        "SELECT state || '|' || body || '|' || conversation_entry_id FROM feedback_copy WHERE id='"
+                                + COPY + "'"))
+                .containsExactly("POSTED|Actual shown words.|" + ANSWER);
     }
 
     @ParameterizedTest
@@ -304,7 +330,19 @@ class PracticeV1ConversationReceiptDatabaseTest {
                         + "'");
     }
 
-    private static String receipt(String body) {
+    /** Sets the words that the show_feedback call for this feedback shows. */
+    private static void showText(TestDatabase database, String text) {
+        PracticeMigrationFixture.execute(
+                database,
+                "UPDATE conversation_entry SET payload=jsonb_set(payload,'{message,content,1,arguments,text}',"
+                        + "to_jsonb('" + text + "'::text)) WHERE id='" + ANSWER + "'");
+    }
+
+    private static String receipt() {
+        return "UPDATE feedback_copy SET state='POSTED',posted_at='2026-02-01T00:01:00Z' WHERE id='" + COPY + "'";
+    }
+
+    private static String receiptWithWords(String body) {
         return "UPDATE feedback_copy SET state='POSTED',posted_at='2026-02-01T00:01:00Z',body=" + body + " WHERE id='"
                 + COPY + "'";
     }
