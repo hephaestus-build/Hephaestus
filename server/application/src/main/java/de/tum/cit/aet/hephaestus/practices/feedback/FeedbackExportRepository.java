@@ -28,11 +28,18 @@ public interface FeedbackExportRepository extends Repository<Feedback, UUID> {
         """, nativeQuery = true)
     List<Received> findReceived(@Param("accountId") long accountId, @Param("states") Collection<String> states);
 
-    /** The posted pieces of these feedback rows, in order. */
+    /**
+     * The posted pieces of these feedback rows, in order. A conversation receipt's words are read from its answer
+     * ({@code conversation_receipt_words}), never from the copy, so a redacted answer shows none.
+     */
     @WorkspaceAgnostic("The self-service export reads the account's own feedback in every workspace")
     @Query(value = """
         SELECT c.feedback_id AS feedbackId, c.kind AS kind, c.path AS path, c.start_line AS startLine,
-          c.end_line AS endLine, c.body AS body, c.posted_at AS postedAt
+          c.end_line AS endLine,
+          CASE WHEN c.kind='CHAT_TURN'
+            THEN conversation_receipt_words(c.workspace_id,c.feedback_id,c.conversation_entry_id,c.conversation_turn_id)
+            ELSE c.body END AS body,
+          c.posted_at AS postedAt
         FROM feedback_copy c JOIN feedback f ON f.id=c.feedback_id AND f.workspace_id=c.workspace_id
         WHERE f.person_account_id=:accountId AND c.feedback_id IN (:feedbackIds)
           AND c.state='POSTED' AND c.posted_at IS NOT NULL

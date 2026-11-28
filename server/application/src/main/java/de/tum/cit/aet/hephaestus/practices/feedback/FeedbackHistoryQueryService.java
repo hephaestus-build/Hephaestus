@@ -262,6 +262,7 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
         private final Set<UUID> incorrectCopies = new HashSet<>();
         private final Map<UUID, FeedbackResponse> responsesOf = new HashMap<>();
         private final Map<UUID, UUID> threads = new HashMap<>();
+        private final Map<UUID, String> shownWords = new HashMap<>();
         private final Map<UUID, String> identities = new HashMap<>();
         private final Map<String, NoteThreadState> threadStates = new HashMap<>();
 
@@ -351,9 +352,10 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
                             && row.getDestination() == FeedbackDestination.CONVERSATION)
                     .toList();
             if (!ownConversation.isEmpty()) {
-                conversationHistory
-                        .threads(workspaceId, ownConversation)
-                        .forEach(thread -> threads.put(thread.getFeedbackId(), thread.getConversationId()));
+                conversationHistory.threads(workspaceId, ownConversation).forEach(thread -> {
+                    threads.put(thread.getFeedbackId(), thread.getConversationId());
+                    if (thread.getWords() != null) shownWords.put(thread.getFeedbackId(), thread.getWords());
+                });
             }
         }
 
@@ -419,12 +421,8 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
                             .collect(Collectors.joining("\n\n"));
                     if (body.isEmpty()) body = null;
                 } else if (row.getDestination() == FeedbackDestination.CONVERSATION && row.getDeliveredAt() != null) {
-                    body = confirmed.stream()
-                            .filter(copy -> copy.getKind() == FeedbackCopyKind.CHAT_TURN)
-                            .map(FeedbackCopy::getBody)
-                            .filter(Objects::nonNull)
-                            .findFirst()
-                            .orElse(null);
+                    // A read across viewers reads no conversation, so it shows no words of one.
+                    body = shownWords.get(row.getId());
                 } else if (row.getState() == FeedbackState.READY
                         || (row.getDestination() == FeedbackDestination.PRACTICE_PAGE
                                 && row.getDeliveredAt() != null)) {

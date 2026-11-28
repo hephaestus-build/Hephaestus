@@ -36,6 +36,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -102,6 +103,12 @@ class FeedbackRecipientRowSecurityIntegrationTest {
 
     @Autowired
     FeedbackHistoryQueryService history;
+
+    @Autowired
+    FeedbackConversationHistory conversationHistory;
+
+    @Autowired
+    FeedbackRepository feedbackRows;
 
     @Autowired
     ConversationTurnCompletion completion;
@@ -287,7 +294,11 @@ class FeedbackRecipientRowSecurityIntegrationTest {
                 .isEqualTo("UNCONFIRMED Hephaestus could not check whether its answer showed the feedback.");
     }
 
-    /** A redaction that commits after the receipt read the answer's words and before it updates the copy. */
+    /**
+     * A redaction in the receipt's own update of the copy, after the receipt read the answer's words: the copy's guard
+     * reads the words again and sees it. A redaction that commits after the guard's read leaves a posted receipt
+     * whose answer shows no words.
+     */
     @Test
     void shouldRecordTheClaimUnconfirmedWhenItsAnswerIsRedactedWhileTheReceiptUpdatesTheCopy() {
         var ada = recipient();
@@ -384,6 +395,45 @@ class FeedbackRecipientRowSecurityIntegrationTest {
                         "SELECT state || ' ' || COALESCE(conversation_entry_id::text, '-') FROM feedback_copy WHERE id = ?",
                         String.class,
                         recipient.copy()));
+    }
+
+    /**
+     * The history reads a receipt's words from the answer. Its recipient reads them under the owner policies, until a
+     * redaction of the answer; another recipient's binding shows none.
+     */
+    @Test
+    void shouldReadTheReceiptWordsFromTheAnswerAsItsRecipientOnly() {
+        var ada = recipient();
+        var bo = recipient();
+        var fence = claims.claimConversationCopy(WORKSPACE, ada.account(), ada.feedback(), ada.turn(), 1)
+                .orElseThrow();
+        UUID adas = answer(ada, ada.feedback());
+        asAdministrator(ConversationTurnRunRows.endDone(ada.turn()));
+        claims.recordConversationReceipt(
+                WORKSPACE, fence, delivered(fence, adas, fence.writeStartedAt().plusSeconds(1)));
+        var rows = List.of(feedbackRows.findById(ada.feedback()).orElseThrow());
+
+        assertThat(conversationHistory.threads(WORKSPACE, rows)).singleElement().satisfies(thread -> {
+            assertThat(thread.getConversationId()).isEqualTo(ada.conversation());
+            assertThat(thread.getWords()).isEqualTo("Try a focused test.");
+        });
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            owners.ofJob(bo.account());
+            assertThat(application.queryForObject(
+                            "SELECT conversation_receipt_words(?, ?, ?, ?)",
+                            String.class,
+                            WORKSPACE,
+                            ada.feedback(),
+                            adas,
+                            ada.turn()))
+                    .as("another recipient's binding shows none of the words")
+                    .isNull();
+        });
+
+        asAdministrator("UPDATE conversation_entry SET redacted_at = now() WHERE id = '%s'".formatted(adas));
+        assertThat(conversationHistory.threads(WORKSPACE, rows))
+                .singleElement()
+                .satisfies(thread -> assertThat(thread.getWords()).isNull());
     }
 
     @Test
@@ -502,9 +552,8 @@ class FeedbackRecipientRowSecurityIntegrationTest {
                 UPDATE feedback SET state = 'DELIVERED', delivered_at = now() WHERE id = '%5$s';
                 DELETE FROM feedback_copy WHERE id = '%6$s';
                 INSERT INTO feedback_copy (id, workspace_id, feedback_id, kind, position, state, write_key,
-                    write_started_at, posted_at, body, conversation_entry_id)
-                VALUES ('%6$s', %1$d, '%5$s', 'CHAT_TURN', 0, 'POSTED', '%6$s', now(), now(), 'Try a focused test.',
-                        '%3$s');
+                    write_started_at, posted_at, conversation_entry_id)
+                VALUES ('%6$s', %1$d, '%5$s', 'CHAT_TURN', 0, 'POSTED', '%6$s', now(), now(), '%3$s');
                 """.formatted(
                         WORKSPACE,
                         recipient.account(),
