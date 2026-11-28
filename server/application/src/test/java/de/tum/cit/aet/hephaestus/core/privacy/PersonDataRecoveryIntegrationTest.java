@@ -655,11 +655,13 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                         beans.getBean(RestoredWorkspacePurges.class),
                         beans.getBean(RestoredDisconnects.class),
                         new RestoredOwnerContent(
-                                jdbc, beans.getBean(RestoredMessageDeletions.class), (owner, ids) -> {}),
+                                jdbc,
+                                beans.getBean(RestoredMessageDeletions.class),
+                                (owner, ids) -> {},
+                                beans.getBean(RestoredTeamWork.class)),
                         beans.getBean(RestoredCollectionErasures.class),
                         beans.getBean(RestoredSlackMessageChanges.class),
                         beans.getBean(RestoredSlackChannelErasures.class),
-                        beans.getBean(RestoredTeamWork.class),
                         new PersonDataRecoveryProperties(manifest.toString())));
         context.registerBean("processing", SmartLifecycle.class, () -> new SmartLifecycle() {
             @Override

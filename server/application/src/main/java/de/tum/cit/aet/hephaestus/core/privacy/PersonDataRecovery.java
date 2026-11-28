@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredCollectionErasures;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredDisconnects;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredSlackChannelErasures;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredSlackMessageChanges;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredTeamWork;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredWorkspacePurges;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -66,7 +65,6 @@ final class PersonDataRecovery implements SmartLifecycle {
     private final RestoredCollectionErasures collections;
     private final RestoredSlackMessageChanges slackMessages;
     private final RestoredSlackChannelErasures slackChannels;
-    private final RestoredTeamWork teamWork;
     private final String manifestPath;
     private boolean running;
 
@@ -82,7 +80,6 @@ final class PersonDataRecovery implements SmartLifecycle {
             RestoredCollectionErasures collections,
             RestoredSlackMessageChanges slackMessages,
             RestoredSlackChannelErasures slackChannels,
-            RestoredTeamWork teamWork,
             PersonDataRecoveryProperties properties) {
         this.service = service;
         this.resolver = resolver;
@@ -95,7 +92,6 @@ final class PersonDataRecovery implements SmartLifecycle {
         this.collections = collections;
         this.slackMessages = slackMessages;
         this.slackChannels = slackChannels;
-        this.teamWork = teamWork;
         this.manifestPath = properties.recoveryManifest();
     }
 
@@ -260,10 +256,7 @@ final class PersonDataRecovery implements SmartLifecycle {
                 collections.eraseAgain(collection.workspaceId(), collection.connectionId(), collection.collectionId());
             content.deleteAgain(manifest.messageDeletions(), recordDeletions);
             // Before the people: erasure of an account also ends the versions that this leaves available.
-            for (TeamVersionWithdrawal version : withdrawals)
-                teamWork.withdrawAgain(version.workspaceId(), version.versionId());
-            for (WorkspaceDeparture departure : departures)
-                teamWork.withdrawDepartedAgain(departure.workspaceId(), departure.accountId());
+            content.withdrawAgain(withdrawals, departures);
             for (SlackChannelErasure channel : manifest.slackChannelErasures()) {
                 Instant erasedAt = Objects.requireNonNullElse(channel.erasedAt(), manifest.restorePoint());
                 slackChannels.eraseAgain(

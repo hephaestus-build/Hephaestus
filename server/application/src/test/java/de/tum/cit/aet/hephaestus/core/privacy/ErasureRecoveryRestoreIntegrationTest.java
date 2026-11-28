@@ -857,11 +857,11 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
                                     jdbc,
                                     beans.getBean(RestoredMessageDeletions.class),
                                     new PersonalGoalRecoveryAdapter(
-                                            jdbc, beans.getBean(OwnerScope.class), transactions)),
+                                            jdbc, beans.getBean(OwnerScope.class), transactions),
+                                    beans.getBean(RestoredTeamWork.class)),
                             beans.getBean(RestoredCollectionErasures.class),
                             beans.getBean(RestoredSlackMessageChanges.class),
                             beans.getBean(RestoredSlackChannelErasures.class),
-                            beans.getBean(RestoredTeamWork.class),
                             new PersonDataRecoveryProperties(manifest.toString())));
             context.refresh();
             assertThat(context.getBean(PersonDataRecovery.class).isRunning()).isTrue();
