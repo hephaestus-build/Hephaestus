@@ -321,6 +321,17 @@ interface ProviderEventRepository extends Repository<ProviderEventRow, Long> {
             @Param("provider") String provider,
             @Param("resource") String resource);
 
+    @Modifying
+    @Query(value = """
+            DELETE FROM provider_event
+            WHERE workspace_id = :workspaceId AND provider = :provider AND state = 'DONE' AND headers->>:key = :value
+            """, nativeQuery = true)
+    int deleteHandledByHeader(
+            @Param("workspaceId") long workspaceId,
+            @Param("provider") String provider,
+            @Param("key") String key,
+            @Param("value") String value);
+
     @WorkspaceAgnostic("The workspace is bound explicitly; null selects only installation rows")
     @Query(value = """
             SELECT id, workspace_id AS "workspaceId", provider, error_class AS "errorClass", received_at AS "receivedAt",

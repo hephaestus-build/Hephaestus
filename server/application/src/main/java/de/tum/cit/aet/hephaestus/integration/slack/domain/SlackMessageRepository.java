@@ -153,12 +153,15 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
     long countByWorkspaceId(Long workspaceId);
 
     /**
-     * Retention-sweep fan-out: every workspace that currently has at least one ingested message. Native +
+     * Retention-sweep fan-out: every workspace with an ingested message or a DM producer pin. Native +
      * unscoped by design (the {@link SlackRetentionSweeper}
      * runs {@code @WorkspaceAgnostic}, so the tenancy {@code StatementInspector} treats this as exempt). Callers
      * outside a bypass scope will trip the inspector — that is intentional.
      */
-    @Query(value = "SELECT DISTINCT workspace_id FROM slack_message", nativeQuery = true)
+    @Query(value = """
+                    SELECT workspace_id FROM slack_message
+                    UNION SELECT workspace_id FROM slack_dm_producer_pin
+                    """, nativeQuery = true)
     List<Long> findDistinctWorkspaceIds();
 
     /**

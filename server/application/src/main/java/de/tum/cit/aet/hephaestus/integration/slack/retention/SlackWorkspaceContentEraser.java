@@ -5,11 +5,15 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackDmProducerPinRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.mentor.spi.MentorWorkspaceErasure;
+import de.tum.cit.aet.hephaestus.mentor.spi.Producer;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -34,11 +38,15 @@ public class SlackWorkspaceContentEraser {
     private final SlackParticipantConsentRepository slackParticipantConsentRepository;
     private final ConversationFeedbackErasure conversationFeedbackErasure;
     private final AgentActions actions;
+    private final SlackDmProducerPinRepository pins;
+    private final ProviderEventStore events;
     private final MentorWorkspaceErasure mentorRows;
 
     /** Idempotent: an already-erased (or never-populated) workspace deletes 0 rows. */
     @Transactional
     public void eraseWorkspace(long workspaceId) {
+        pins.deleteByWorkspaceId(workspaceId);
+        events.deleteHandledByHeader(workspaceId, "slack", ProviderEvent.PRODUCER, Producer.MENTOR.name());
         actions.eraseKinds(
                 workspaceId,
                 List.of(

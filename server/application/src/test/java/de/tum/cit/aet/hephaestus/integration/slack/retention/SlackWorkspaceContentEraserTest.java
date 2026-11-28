@@ -6,6 +6,9 @@ import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackDmProducerPinRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
@@ -47,6 +50,12 @@ class SlackWorkspaceContentEraserTest extends BaseUnitTest {
     private AgentActions actions;
 
     @Mock
+    private SlackDmProducerPinRepository pins;
+
+    @Mock
+    private ProviderEventStore events;
+
+    @Mock
     private MentorWorkspaceErasure mentorRows;
 
     @InjectMocks
@@ -55,6 +64,9 @@ class SlackWorkspaceContentEraserTest extends BaseUnitTest {
     @Test
     void eraseWorkspace_dropsAllIngestedContentConsentAndDerivedFeedback() {
         eraser.eraseWorkspace(42L);
+
+        verify(pins).deleteByWorkspaceId(42L);
+        verify(events).deleteHandledByHeader(42L, "slack", ProviderEvent.PRODUCER, "MENTOR");
 
         // The Slack notices, joins and consent announcements of the workspace.
         verify(actions)

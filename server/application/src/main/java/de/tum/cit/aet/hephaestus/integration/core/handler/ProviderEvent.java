@@ -18,6 +18,12 @@ public record ProviderEvent(String subject, Map<String, String> headers, byte[] 
     /** Installation identity copied from the verified GitHub payload, never from an HTTP header. */
     public static final String GITHUB_INSTALLATION_ID = "Hephaestus-GitHub-Installation-Id";
 
+    /** The producer recorded by the receiver. Existing queued rows are legacy. */
+    public static final String PRODUCER = "Hephaestus-Producer";
+
+    /** The verified original author of a Slack source when the provider mutation omits the author. */
+    public static final String SLACK_SOURCE_AUTHOR = "Hephaestus-Slack-Source-Author";
+
     public ProviderEvent {
         headers = Map.copyOf(headers);
     }
