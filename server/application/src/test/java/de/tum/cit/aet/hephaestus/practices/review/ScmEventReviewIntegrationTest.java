@@ -140,6 +140,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewUsageSnapshot;
 import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
+import de.tum.cit.aet.hephaestus.testconfig.ScheduledLocks;
 import de.tum.cit.aet.hephaestus.testconfig.SharedEventRecorder;
 import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
@@ -150,6 +151,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeMode;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -3774,6 +3776,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         var deadline = events.findById(occasion.getId()).orElseThrow().getEvidenceExpiresAt();
         // Past its expiry the evidence is no longer used, also before the reaper replaces it.
         assertOccasionUnavailable(prepared, prepared.version(), occasion.getId());
+        ScheduledLocks.free(jdbc, PendingItemEventReaper.class, "sweep");
         reaper.sweep();
 
         var swept = events.findById(occasion.getId()).orElseThrow();
@@ -3791,7 +3794,13 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 .isEqualTo(deadline);
         assertOccasionUnavailable(prepared, prepared.version(), occasion.getId());
         // A second sweep no longer selects the statement: it stays as it is, with the same expiry.
+        var lastRun = "SELECT locked_at FROM shedlock WHERE name = 'pending-item-event-reaper'";
+        var firstRun = jdbc.queryForObject(lastRun, Timestamp.class);
+        ScheduledLocks.free(jdbc, PendingItemEventReaper.class, "sweep");
         reaper.sweep();
+        assertThat(jdbc.queryForObject(lastRun, Timestamp.class))
+                .as("the second sweep ran")
+                .isAfter(firstRun);
         assertThat(unretained(occasion.getId())).isEqualTo("EXPIRED");
         assertThat(events.findById(occasion.getId()).orElseThrow().getEvidenceExpiresAt())
                 .isEqualTo(deadline);
