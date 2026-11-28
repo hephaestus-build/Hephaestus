@@ -1112,7 +1112,8 @@
 			"alreadySaid": [],
 			"discussion": [],
 			"discussionCapture": "COMPLETE",
-			"criteriaQuestion": null
+			"criteriaQuestion": null,
+			"countSupplyGap": "The cited description line is not quoted in the evaluation, so its #14 supplies no count."
 		},
 		{
 			"id": "gh-a-08-timer-store-state-and-queue",
@@ -2488,7 +2489,7 @@
 							}
 						],
 						"summary": {
-							"body": "Four of the seven commit subjects, such as \"wip\" and \"stuff\", do not say what changed, so the history is hard to follow. In future commits, name the thing you changed in each subject.",
+							"body": "Several of the commit subjects, such as \"wip\" and \"stuff\", do not say what changed, so the history is hard to follow. In future commits, name the thing you changed in each subject.",
 							"basedOn": [
 								"r1"
 							]
@@ -2633,7 +2634,7 @@
 						"summary": null,
 						"inline": [
 							{
-								"body": "`save()` nests two `if` blocks before it reaches the file write. Return early with `guard` for the empty title and body, and move the file name into its own helper.",
+								"body": "`save()` nests its `if` blocks before it reaches the file write. Return early with `guard` for the empty title and body, and move the file name into its own helper.",
 								"basedOn": [
 									"p1"
 								],
@@ -3613,7 +3614,8 @@
 			"alreadySaid": [],
 			"discussion": [],
 			"discussionCapture": "COMPLETE",
-			"criteriaQuestion": null
+			"criteriaQuestion": null,
+			"countSupplyGap": "The cited description line is not quoted in the evaluation; production quotes it, and its \"three\" supplies the count."
 		},
 		{
 			"id": "gl-b-06-verify-steps-no-expected-result",
@@ -4105,7 +4107,7 @@
 						},
 						"inline": [
 							{
-								"body": "This loop repeats the row formatting from `export_csv`: negative totals set to zero and the currency upper-cased. A change to either rule needs two edits, so share one helper and pass the delimiter.",
+								"body": "This loop repeats the row formatting from `export_csv`: negative totals set to zero and the currency upper-cased. A change to either rule needs an edit in both loops, so share one helper and pass the delimiter.",
 								"basedOn": [
 									"p1"
 								],
@@ -4212,7 +4214,8 @@
 			"alreadySaid": [],
 			"discussion": [],
 			"discussionCapture": "COMPLETE",
-			"criteriaQuestion": null
+			"criteriaQuestion": null,
+			"countSupplyGap": "The evaluation quotes only the first cited line, not the line that sets the total to 0."
 		},
 		{
 			"id": "gl-b-09-committed-sandbox-key-and-oops-commit",
@@ -5439,7 +5442,7 @@
 						"summary": null,
 						"inline": [
 							{
-								"body": "`processThumbnails` nests the download, size check, resize and upload inside one loop, five levels deep. Pull the per-image steps into named functions so the loop reads at a glance.",
+								"body": "`processThumbnails` nests the download, size check, resize and upload inside one loop, several levels deep. Pull the per-image steps into named functions so the loop reads at a glance.",
 								"basedOn": [
 									"p2"
 								],
@@ -6879,7 +6882,8 @@
 					}
 				}
 			],
-			"criteriaQuestion": null
+			"criteriaQuestion": null,
+			"countSupplyGap": "The evaluation quotes only the first cited line, not the line with the attempt limit."
 		},
 		{
 			"id": "gh-c-08-run-summary-empty-list",
@@ -7341,7 +7345,8 @@
 					}
 				}
 			],
-			"criteriaQuestion": null
+			"criteriaQuestion": null,
+			"countSupplyGap": "The cited description lines are not quoted in the evaluation, so their 5 and 2 supply no count."
 		},
 		{
 			"id": "gh-c-11-statement-import-test-files-not-captured",
@@ -7665,7 +7670,8 @@
 					}
 				}
 			],
-			"criteriaQuestion": null
+			"criteriaQuestion": null,
+			"countSupplyGap": "The evaluation quotes only the first cited line, so the guard value supplies no count."
 		},
 		{
 			"id": "gh-c-13-committed-payments-key",
@@ -10404,7 +10410,7 @@
 						"summary": null,
 						"inline": [
 							{
-								"body": "The paging clamp and the `PageDto` mapping here repeat `listOpen`, so a change to the size limit needs two edits. Move both into one shared function that both endpoints call.",
+								"body": "The paging clamp and the `PageDto` mapping here repeat `listOpen`, so a change to the size limit needs an edit in both places. Move both into one shared function that both endpoints call.",
 								"basedOn": [
 									"p1"
 								],
@@ -10765,7 +10771,7 @@
 							}
 						],
 						"summary": {
-							"body": "Three commit subjects (`wip`, `fix` and `more fixes`) do not say what each commit changes. In later commits, name the change in the subject, for example `Show initials when a profile has no avatar`.",
+							"body": "The commit subjects `wip`, `fix` and `more fixes` do not say what each commit changes. In later commits, name the change in the subject, for example `Show initials when a profile has no avatar`.",
 							"basedOn": [
 								"r1"
 							]
@@ -11637,7 +11643,7 @@
 						"summary": null,
 						"inline": [
 							{
-								"body": "This `catch` answers `[]` when `listOrders` fails, so the dashboard shows no orders during an outage. Let the error reach the error handler, or answer 500 and log it.",
+								"body": "This `catch` answers `[]` when `listOrders` fails, so the dashboard shows no orders during an outage. Let the error reach the error handler, or answer with a server error status and log it.",
 								"basedOn": [
 									"p2"
 								],

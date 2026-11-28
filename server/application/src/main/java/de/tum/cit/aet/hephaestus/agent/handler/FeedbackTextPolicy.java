@@ -95,6 +95,15 @@ public final class FeedbackTextPolicy {
     /** The first model-written text of the piece that breaks a rule, or null when the piece may be prepared. */
     @Nullable
     public Refusal refusal(ComposedFeedback piece) {
+        return refusal(piece, Set.of());
+    }
+
+    /**
+     * As {@link #refusal(ComposedFeedback)}, where {@code verified} holds counts that the server computed from the
+     * review's own rows, such as the number of items that a practice page pattern spans.
+     */
+    @Nullable
+    public Refusal refusal(ComposedFeedback piece, Set<String> verified) {
         var texts = new LinkedHashMap<String, String>();
         String summary = piece.summary();
         if (summary != null) texts.put("summary", summary);
@@ -106,14 +115,20 @@ public final class FeedbackTextPolicy {
             texts.put("page.body", page.body());
             texts.put("page.nextStep", page.nextStep());
         }
-        return refusal(texts);
+        return refusal(texts, verified);
     }
 
     /** The first model-written text, by its field such as {@code notes[1]}, that breaks a rule; null when none does. */
     @Nullable
     public Refusal refusal(Map<String, String> textsByField) {
+        return refusal(textsByField, Set.of());
+    }
+
+    /** As {@link #refusal(Map)}, with counts that the server computed from the review's own rows. */
+    @Nullable
+    public Refusal refusal(Map<String, String> textsByField, Set<String> verified) {
         for (var text : textsByField.entrySet()) {
-            var rule = broken(text.getValue());
+            var rule = broken(text.getValue(), verified);
             if (rule != null) return new Refusal(rule, text.getKey());
         }
         return null;
@@ -122,6 +137,11 @@ public final class FeedbackTextPolicy {
     /** The first rule that the text breaks, or null when it may be prepared. */
     @Nullable
     Rule broken(String text) {
+        return broken(text, Set.of());
+    }
+
+    @Nullable
+    Rule broken(String text, Set<String> verified) {
         if (HiddenCharacters.hides(text)) return Rule.HIDDEN_CHARACTER;
         if (SLACK_SYNTAX.matcher(text).find()) return Rule.MENTION;
         var read = Reading.of(text);
@@ -133,7 +153,10 @@ public final class FeedbackTextPolicy {
         if (MENTION.matcher(read.prose).find()) return Rule.MENTION;
         if (!read.links.isEmpty() && !supplied().containsAll(read.links)) return Rule.LINK;
         var counts = statedCounts(read.prose.toString());
-        if (!counts.isEmpty() && !suppliedCounts().containsAll(counts)) return Rule.COUNT;
+        if (!counts.isEmpty()
+                && !counts.stream()
+                        .allMatch(count ->
+                                verified.contains(count) || suppliedCounts().contains(count))) return Rule.COUNT;
         return null;
     }
 

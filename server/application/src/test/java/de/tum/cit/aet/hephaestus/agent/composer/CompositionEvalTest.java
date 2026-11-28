@@ -177,8 +177,15 @@ class CompositionEvalTest {
                         .put("compositionId", composition.path("id").asString())
                         .put("accepted", checked.accepted())
                         .set("errors", CompositionEvalCases.strings(checked.errors()));
-                if ("reference".equals(composition.path("id").asString()) && !checked.accepted())
-                    refused.add(scenario.id() + ": " + String.join("; ", checked.errors()));
+                if (!"reference".equals(composition.path("id").asString())) continue;
+                // A case's data can name why the evaluation supplies no count that production quotes would supply.
+                if (scenario.item().path("countSupplyGap").isString()) {
+                    assertThat(checked.rule())
+                            .as("%s marks a count supply gap, so only COUNT may refuse its reference", scenario.id())
+                            .isEqualTo("COUNT");
+                    continue;
+                }
+                if (!checked.accepted()) refused.add(scenario.id() + ": " + String.join("; ", checked.errors()));
             }
         }
 

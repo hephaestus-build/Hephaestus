@@ -22,6 +22,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,7 +48,7 @@ public final class FeedbackDraftBuilder {
         var drafts = new ArrayList<FeedbackDraft>();
         for (var piece : request.composition()) {
             if (!allowedResults.containsAll(piece.resultIds())) throw new AdmissionConflictException();
-            var refusal = texts.refusal(piece);
+            var refusal = texts.refusal(piece, verifiedCounts(piece, byId, historyById));
             if (refusal != null) {
                 log.info(
                         "Refused composed {} feedback of review job {}: {} in {}",
@@ -207,5 +208,24 @@ public final class FeedbackDraftBuilder {
                 anchor == null ? null : anchor.side(),
                 id.toString(),
                 kind == FeedbackCopyKind.CHAT_TURN ? null : FeedbackIds.writeMarker(id));
+    }
+
+    /**
+     * The count that the server verified for a piece: the distinct items that a practice page pattern spans, from the
+     * admitted rows and the support history. No other destination states such a count.
+     */
+    private static Set<String> verifiedCounts(
+            ComposedFeedback piece, Map<UUID, AdmittedResultSnapshot> admitted, Map<UUID, ResultHistoryEntry> history) {
+        if (piece.destination() != FeedbackDestination.PRACTICE_PAGE) return Set.of();
+        long items = piece.resultIds().stream()
+                .flatMap(id -> {
+                    var row = admitted.get(id);
+                    if (row != null) return Stream.of(row.candidate().itemId());
+                    var prior = history.get(id);
+                    return prior == null ? Stream.<Long>empty() : Stream.of(prior.itemId());
+                })
+                .distinct()
+                .count();
+        return Set.of(Long.toString(items));
     }
 }
