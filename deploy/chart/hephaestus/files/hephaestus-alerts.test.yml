@@ -3775,6 +3775,8 @@ tests:
         values: "0+1x130"
       - series: 'privacy_job_completed_total{job="hephaestus",instance="server:9090",exported_job="conversation_retention",outcome="success"}'
         values: "0x130"
+      - series: 'privacy_job_completed_total{job="hephaestus",instance="server:9090",exported_job="team_version_expiry",outcome="success"}'
+        values: "0x130"
     alert_rule_test:
       - eval_time: 80m
         alertname: HephaestusPrivacyJobNotRunning
@@ -3791,6 +3793,12 @@ tests:
           - exp_labels:
               severity: warning
               exported_job: conversation_retention
+            exp_annotations:
+              summary: An hourly privacy sweep ended no run in four hours
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+          - exp_labels:
+              severity: warning
+              exported_job: team_version_expiry
             exp_annotations:
               summary: An hourly privacy sweep ended no run in four hours
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response

@@ -478,6 +478,9 @@ de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackOnboardingService
 de.tum.cit.aet.hephaestus.integration.slack.retention.SlackRetentionSweeper
 de.tum.cit.aet.hephaestus.integration.slack.sync.SlackDataSyncScheduler
 de.tum.cit.aet.hephaestus.integration.submission.TeamItemVersionRepository.eraseSubmitter(long)
+de.tum.cit.aet.hephaestus.integration.submission.TeamItemVersionRepository.existsDue()
+de.tum.cit.aet.hephaestus.integration.submission.TeamItemVersionRepository.expireDue(int)
+de.tum.cit.aet.hephaestus.integration.submission.adapter.TeamVersionExpirySweeper
 de.tum.cit.aet.hephaestus.mentor.runtime.MentorSourceRepository
 de.tum.cit.aet.hephaestus.notification.NotificationRedeliveryJob
 de.tum.cit.aet.hephaestus.notification.OverduePublicationMeter

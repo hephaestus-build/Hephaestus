@@ -407,15 +407,15 @@ A refusal at a budget cap also counts in `llm_budget_blocked_total`, with `surfa
 
 ## Privacy-job metrics
 
-Account erasure, export generation, export expiry, conversation retention and LLM usage retention each report one terminal
-outcome per run, published by the server role.
+Each privacy job reports one terminal outcome per run, published by the server role.
+The `job` label below names the job.
 
 | Prometheus name               | Type    | Labels           | Meaning                                      |
 | ----------------------------- | ------- | ---------------- | -------------------------------------------- |
 | `privacy_job_completed_total` | Counter | `job`, `outcome` | Terminal privacy-job executions              |
 | `privacy_job_affected_total`  | Counter | `job`            | Rows or subjects the run removed or produced |
 
-`job` is one of `account_erasure`, `conversation_copy_retention`, `conversation_retention`, `export_generation`, `export_retention`, or `llm_usage_retention`.
+`job` is one of `account_erasure`, `conversation_copy_retention`, `conversation_retention`, `export_generation`, `export_retention`, `llm_usage_retention`, or `team_version_expiry`.
 A scrape sets its own `job`, so the store keeps this label as `exported_job`.
 `outcome` is `success`, `incomplete`, or `failure`.
 An empty backlog is a `success`.
@@ -423,6 +423,9 @@ An empty backlog is a `success`.
 `HephaestusPrivacyJobNotRunning` reports an hourly sweep that ended no run.
 `HephaestusPrivacyJobFailing` reports a job that failed or left work at least twice in 26 hours.
 `incomplete` means the run ended without error but exhausted its time budget while eligible work remained.
+
+For `team_version_expiry`, `incomplete` means that a version is still past its expiry date after the run.
+The run spent its time budget, or another transaction held the version.
 
 For `conversation_retention` and `conversation_copy_retention`, `incomplete` means instead that the erasure of one person's entries failed.
 For `conversation_copy_retention`, it can also mean that the tool results of one workspace could not be read.
