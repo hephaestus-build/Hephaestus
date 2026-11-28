@@ -55,9 +55,8 @@ class TeamVersionExpirySweeperIntegrationTest extends BaseIntegrationTest {
         databaseTestUtils.cleanDatabase();
         course = workspaces.save(WorkspaceTestFixtures.activeWorkspace(
                 "course-" + UUID.randomUUID().toString().substring(0, 8)));
-        student =
-                Objects.requireNonNull(accounts.save(AccountFixtures.withStatus("Student", Account.Status.ACTIVE))
-                        .getId());
+        student = Objects.requireNonNull(accounts.save(AccountFixtures.withStatus("Student", Account.Status.ACTIVE))
+                .getId());
         memberships.createMembership(course, student, WorkspaceRole.MEMBER);
         team = UUID.randomUUID();
         jdbc.update(
@@ -117,7 +116,9 @@ class TeamVersionExpirySweeperIntegrationTest extends BaseIntegrationTest {
                     held,
                     workspace());
             // The sweep runs on another connection and must not wait for this one.
-            CompletableFuture.runAsync(sweeper::sweepNow).orTimeout(20, TimeUnit.SECONDS).join();
+            CompletableFuture.runAsync(sweeper::sweepNow)
+                    .orTimeout(20, TimeUnit.SECONDS)
+                    .join();
         });
 
         assertThat(state(free)).isEqualTo("EXPIRED");
