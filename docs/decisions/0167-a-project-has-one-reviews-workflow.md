@@ -75,10 +75,10 @@ An admin who configures reviews must not read a team's content because of that r
    - `PERSONAL`: the producers of ADR 0160 decision 1, as today.
 8. **No history moves.** An existing scan keeps its id, report, comparison, SARIF and retention as an `OPERATIONAL` review. No old review gets team readers, a discussion or team memory.
 9. **One writer of scheduled reviews.** The review scheduler is the only writer of `SCHEDULE` reviews, and the scan driver only advances reviews. Until the cutover, the recurring check opens scans as it does now, and no setup schedules a repository.
-10. **One subject key.** A review and its results name their subject by `item`, for every kind of version.
+10. **One item key.** A review and its results key on `item`, for every kind of version.
     - A team's submitted work has one `item` row for each `team_item`. Its kind is the team item's kind, such as `team.board`, and its source is the `team_item`. The row is written with the `team_item` and removed with it.
-    - A review of a submitted version names that `item` and pins the `team_item_version` as its version. All versions of one team item form one history, and the comparison of decision 6 compares a version with the one before it.
-    - No second subject key exists on `review` or on `result`.
+    - A review of a submitted version names that `item` and pins the `team_item_version` as its version. All versions of one team item form one history, and decision 6 chooses the baseline in it.
+    - No second item key exists on `review` or on `result`.
 
 ### What this changes in other ADRs
 
