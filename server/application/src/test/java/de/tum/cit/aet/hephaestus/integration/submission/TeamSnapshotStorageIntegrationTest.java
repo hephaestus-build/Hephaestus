@@ -179,9 +179,7 @@ class TeamSnapshotStorageIntegrationTest extends BaseIntegrationTest {
         UUID version = submitted(student);
 
         assertThatThrownBy(() -> jdbc.update(
-                        "DELETE FROM team_snapshot WHERE version_id = ? AND workspace_id = ?",
-                        version,
-                        workspace()))
+                        "DELETE FROM team_snapshot WHERE version_id = ? AND workspace_id = ?", version, workspace()))
                 .isInstanceOf(DataIntegrityViolationException.class);
         assertThat(snapshots(version)).isOne();
     }
