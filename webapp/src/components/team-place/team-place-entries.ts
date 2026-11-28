@@ -1,3 +1,5 @@
+import type { RevisitFinding } from "@/components/practice-vocabulary/revisit-finding-defs";
+
 /**
  * The shapes the team place renders. They mirror the team place DTOs agreed with the server owners, so the route maps
  * the generated types onto them field for field when the endpoints exist.
@@ -46,6 +48,31 @@ export interface TeamAnswerUseData {
 }
 
 /**
+ * A real strategy choice that a review leaves the team on one problem, at most one in a message. Hephaestus proposes
+ * the options and may draft a note; only a member records the team's decision.
+ */
+export interface TeamChoicePoint {
+	problemId: string;
+	/** Two or three. */
+	options: readonly { id: string; text: string }[];
+	draftNote?: string;
+	citations: readonly TeamCitation[];
+}
+
+/**
+ * What a later review shows about a recorded decision. It names the decision record; the note, state and recorder come
+ * from that record when it is read, never from a copy.
+ */
+export interface TeamRevisit {
+	decisionId: string;
+	decisionRecordId: string;
+	finding: RevisitFinding;
+	/** Hephaestus's words. */
+	statement: string;
+	citations: readonly TeamCitation[];
+}
+
+/**
  * `COMPOSED`: Hephaestus wrote the message. `NOT_COMPOSED`: it did not, and the cause stays on the record.
  * `STALE`: a source it cited is gone, so the server sends no words.
  */
@@ -60,6 +87,8 @@ export interface TeamMentorMessageData {
 	/** Only when `COMPOSED`. */
 	body?: string;
 	citations: readonly TeamCitation[];
+	choicePoint?: TeamChoicePoint;
+	revisits: readonly TeamRevisit[];
 	answerUse: TeamAnswerUseData;
 }
 
