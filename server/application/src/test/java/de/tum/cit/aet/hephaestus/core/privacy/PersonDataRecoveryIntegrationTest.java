@@ -208,8 +208,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
     }
 
     private long account(String name) {
-        return Objects.requireNonNull(
-                accounts.saveAndFlush(new Account(name)).getId());
+        return Objects.requireNonNull(accounts.saveAndFlush(new Account(name)).getId());
     }
 
     /** A new version in a new team of the workspace, written as a submission writes it. */
