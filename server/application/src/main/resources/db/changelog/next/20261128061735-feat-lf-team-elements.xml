@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <!--
+      A server of the previous release can end or delete a version while this runs. So each change set locks only one
+      existing table.
+    -->
+    <changeSet id="1795846655000-1" author="hephaestus">
+        <comment>The citable elements of a snapshot, in the order their text is written for a review (ADR 0165). Nothing writes them yet.</comment>
+        <createTable tableName="team_element">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="team_elementPK"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="snapshot_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="element_id" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="kind" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="label" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="parent_element_id" type="VARCHAR(128)"/>
+            <column name="text" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="first_line" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_line" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="team_element" baseColumnNames="snapshot_id,workspace_id" constraintName="sfk_team_element_snapshot" onDelete="CASCADE" referencedTableName="team_snapshot" referencedColumnNames="id,workspace_id"/>
+        <addUniqueConstraint tableName="team_element" columnNames="snapshot_id, element_id" constraintName="uk_team_element_id"/>
+        <addUniqueConstraint tableName="team_element" columnNames="snapshot_id, first_line" constraintName="uk_team_element_line"/>
+        <addForeignKeyConstraint baseTableName="team_element" baseColumnNames="snapshot_id,parent_element_id" constraintName="sfk_team_element_parent" deferrable="true" initiallyDeferred="true" referencedTableName="team_element" referencedColumnNames="snapshot_id,element_id"/>
+        <createIndex tableName="team_element" indexName="idx_team_element_snapshot">
+            <column name="snapshot_id"/>
+            <column name="workspace_id"/>
+        </createIndex>
+        <createIndex tableName="team_element" indexName="idx_team_element_parent">
+            <column name="snapshot_id"/>
+            <column name="parent_element_id"/>
+        </createIndex>
+        <sql>
+ALTER TABLE public.team_element
+    ADD CONSTRAINT ck_team_element_id CHECK (element_id != ''),
+    ADD CONSTRAINT ck_team_element_kind CHECK (kind ~ '[^[:space:]]'),
+    ADD CONSTRAINT ck_team_element_parent CHECK (parent_element_id != element_id),
+    ADD CONSTRAINT ck_team_element_text CHECK (octet_length(text) &lt;= 2097152 AND position(chr(13) IN text) = 0),
+    ADD CONSTRAINT ck_team_element_lines CHECK (first_line &gt;= 1
+        AND last_line - first_line = char_length(text) - char_length(replace(text, chr(10), '')));
+        </sql>
+        <rollback>
+            <dropTable tableName="team_element"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795846655000-2" author="hephaestus">
+        <comment>The rules of an element, for every writer. It arrives only with its version, never changes, and leaves only when its version does.</comment>
+        <createProcedure>
+CREATE FUNCTION public.admit_team_element() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM 1 FROM public.team_snapshot s
+        JOIN public.team_item_version v ON v.id = s.version_id AND v.workspace_id = s.workspace_id
+        WHERE s.id = NEW.snapshot_id AND s.workspace_id = NEW.workspace_id AND v.state = 'AVAILABLE'
+        AND v.created_in_transaction = pg_current_xact_id()::text::bigint
+        FOR SHARE OF v;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'an element arrives only with its new team item version' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END $$
+        </createProcedure>
+        <createProcedure>
+CREATE FUNCTION public.refuse_team_content_change() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'submitted team content never changes' USING ERRCODE = '23514';
+END $$
+        </createProcedure>
+        <createProcedure>
+CREATE FUNCTION public.keep_team_element_of_available_version() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    -- Where the snapshot is being deleted or its version has ended, nothing is found.
+    PERFORM 1 FROM public.team_snapshot s
+        JOIN public.team_item_version v ON v.id = s.version_id AND v.workspace_id = s.workspace_id
+        WHERE s.id = OLD.snapshot_id AND s.workspace_id = OLD.workspace_id AND v.state = 'AVAILABLE';
+    IF FOUND THEN
+        RAISE EXCEPTION 'an element is deleted only with its version''s content' USING ERRCODE = '23514';
+    END IF;
+    RETURN NULL;
+END $$
+        </createProcedure>
+        <sql>
+CREATE TRIGGER team_element_admit BEFORE INSERT ON public.team_element
+    FOR EACH ROW EXECUTE FUNCTION public.admit_team_element();
+CREATE TRIGGER team_element_guard AFTER UPDATE ON public.team_element
+    FOR EACH ROW EXECUTE FUNCTION public.refuse_team_content_change();
+CREATE TRIGGER team_element_kept AFTER DELETE ON public.team_element
+    FOR EACH ROW EXECUTE FUNCTION public.keep_team_element_of_available_version();
+        </sql>
+        <rollback>
+DROP TRIGGER team_element_kept ON public.team_element;
+DROP TRIGGER team_element_guard ON public.team_element;
+DROP TRIGGER team_element_admit ON public.team_element;
+DROP FUNCTION public.keep_team_element_of_available_version();
+DROP FUNCTION public.refuse_team_content_change();
+DROP FUNCTION public.admit_team_element();
+        </rollback>
+    </changeSet>
+    <changeSet id="1795846655000-3" author="hephaestus">
+        <comment>The note that the submitter sends with a version (ADR 0165). It is context, never evidence. Nothing writes it yet.</comment>
+        <createTable tableName="team_context">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="team_contextPK"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="text" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="shared_with_review" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="team_context" baseColumnNames="version_id,workspace_id" constraintName="sfk_team_context_version" onDelete="CASCADE" referencedTableName="team_item_version" referencedColumnNames="id,workspace_id"/>
+        <addUniqueConstraint tableName="team_context" columnNames="version_id, workspace_id" constraintName="uk_team_context_version"/>
+        <sql>
+ALTER TABLE public.team_context
+    ADD CONSTRAINT ck_team_context_text CHECK (text ~ '[^[:space:]]' AND char_length(text) &lt;= 10000);
+        </sql>
+        <rollback>
+            <dropTable tableName="team_context"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1795846655000-4" author="hephaestus">
+        <comment>A note arrives only with its version and never changes. A version that ends loses its note with its other content.</comment>
+        <createProcedure>
+CREATE FUNCTION public.admit_team_context() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM 1 FROM public.team_item_version v
+        WHERE v.id = NEW.version_id AND v.workspace_id = NEW.workspace_id AND v.state = 'AVAILABLE'
+        AND v.created_in_transaction = pg_current_xact_id()::text::bigint
+        FOR SHARE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'a note arrives only with its new team item version' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END $$
+        </createProcedure>
+        <createProcedure>
+CREATE OR REPLACE FUNCTION public.delete_ended_team_version_content() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    DELETE FROM public.team_snapshot s WHERE s.version_id = NEW.id AND s.workspace_id = NEW.workspace_id;
+    DELETE FROM public.team_context c WHERE c.version_id = NEW.id AND c.workspace_id = NEW.workspace_id;
+    RETURN NULL;
+END $$
+        </createProcedure>
+        <sql>
+CREATE TRIGGER team_context_admit BEFORE INSERT ON public.team_context
+    FOR EACH ROW EXECUTE FUNCTION public.admit_team_context();
+CREATE TRIGGER team_context_guard AFTER UPDATE ON public.team_context
+    FOR EACH ROW EXECUTE FUNCTION public.refuse_team_content_change();
+        </sql>
+        <rollback>
+DROP TRIGGER team_context_guard ON public.team_context;
+DROP TRIGGER team_context_admit ON public.team_context;
+DROP FUNCTION public.admit_team_context();
+CREATE OR REPLACE FUNCTION public.delete_ended_team_version_content() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    DELETE FROM public.team_snapshot s WHERE s.version_id = NEW.id AND s.workspace_id = NEW.workspace_id;
+    RETURN NULL;
+END $$;
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

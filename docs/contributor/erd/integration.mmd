@@ -684,6 +684,27 @@ erDiagram
         VARCHAR(512) slug UK
     }
 
+    TeamContext {
+        UUID id PK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        UUID version_id FK,UK "NOT NULL"
+        TEXT text "NOT NULL"
+        BOOLEAN shared_with_review "NOT NULL"
+    }
+
+    TeamElement {
+        UUID id PK
+        BIGINT workspace_id FK "NOT NULL"
+        UUID snapshot_id FK,UK "NOT NULL"
+        VARCHAR(128) element_id UK "NOT NULL"
+        VARCHAR(64) kind "NOT NULL"
+        TEXT label "NOT NULL"
+        VARCHAR(128) parent_element_id FK
+        TEXT text "NOT NULL"
+        INTEGER first_line UK "NOT NULL"
+        INTEGER last_line "NOT NULL"
+    }
+
     TeamItem {
         BIGINT id PK,UK
         BIGINT workspace_id FK,UK "NOT NULL"
@@ -782,6 +803,7 @@ erDiagram
     %% Relationships
     %% One-to-One relationships
     PullRequestReviewComment ||--|| PullRequestReviewThread : reviewed
+    TeamItemVersion ||--|| TeamContext : has
 
     %% One-to-Many relationships
     GitCommit ||--o{ CommitContributor : has
@@ -860,6 +882,8 @@ erDiagram
     Connection ||--o{ SyncJob : connection_id
     Workspace ||--o{ SyncJob : has
     IdentityProvider ||--o{ Team : references
+    TeamElement ||--o{ TeamElement : references
+    TeamSnapshot ||--o{ TeamElement : has
     ProjectTeam ||--o{ TeamItem : has
     TeamItem ||--o{ TeamItemVersion : has
     Account ||--o{ TeamItemVersion : references
