@@ -90,13 +90,14 @@ public class MentorRequest {
 
     /**
      * The question revision and provider-event ref that this version admitted. Only an authorized edit, which raises
-     * the version, moves them; an attempt answers this revision, never the source's newest.
+     * the version, moves them; an attempt answers this revision, never the source's newest. A request without
+     * them answers nothing.
      */
-    @Column(nullable = false, length = 64)
-    private String admittedRevision;
+    @Column(length = 64)
+    private @Nullable String admittedRevision;
 
-    @Column(nullable = false, length = 64)
-    private String admittedSourceRef;
+    @Column(length = 64)
+    private @Nullable String admittedSourceRef;
 
     /**
      * Raised under the request lock by a Stop, a delete, or an unauthorized edit, whether the request is live or
