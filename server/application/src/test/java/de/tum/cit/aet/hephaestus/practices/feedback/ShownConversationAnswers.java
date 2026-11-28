@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -107,6 +108,27 @@ final class ShownConversationAnswers {
                     at);
             return new Shown(conversation, turn, answer, result);
         }));
+    }
+
+    /**
+     * A posted receipt that stores words and names no answer. Without a write fence, it is a receipt that the 1.0 upgrade
+     * brought from 0.x: changelog 1792397538973 dropped its answer. With one, it is a receipt of this release whose answer
+     * an erasure deleted, which clears the binding and keeps the fence.
+     */
+    void unbound(Feedback piece, String words, @Nullable Instant writeStartedAt) {
+        UUID copy = FeedbackIds.copy(piece.getId(), FeedbackCopyKind.CHAT_TURN, 0);
+        var at = Timestamp.from(Objects.requireNonNullElse(piece.getDeliveredAt(), Instant.now()));
+        jdbc.update(
+                "INSERT INTO feedback_copy(id,workspace_id,feedback_id,kind,position,body,state,write_key,"
+                        + "write_started_at,created_at,posted_at) VALUES (?,?,?,'CHAT_TURN',0,?,'POSTED',?,?,?,?)",
+                copy,
+                piece.getWorkspaceId(),
+                piece.getId(),
+                words,
+                writeStartedAt == null ? null : copy.toString(),
+                writeStartedAt == null ? null : Timestamp.from(writeStartedAt),
+                at,
+                at);
     }
 
     private void entry(

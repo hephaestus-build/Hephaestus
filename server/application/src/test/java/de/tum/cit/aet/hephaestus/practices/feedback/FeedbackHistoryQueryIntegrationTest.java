@@ -1178,6 +1178,32 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
                         .isEqualTo(developerId));
     }
 
+    @Test
+    void shouldShowTheStoredWordsOfAReceiptThatThe10UpgradeBroughtFrom0x() {
+        var row = piece(FeedbackDestination.CONVERSATION, FeedbackState.DELIVERED, AT);
+        var proof = result();
+        bind(row, proof);
+        authorize(proof);
+        answers().unbound(row, "Words that the upgrade kept on the receipt.", null);
+
+        assertThat(ownHistory(row).body())
+                .as("the copy is the only home of a migrated receipt's words")
+                .isEqualTo("Words that the upgrade kept on the receipt.");
+    }
+
+    @Test
+    void shouldShowNoWordsOfAReceiptOfThisReleaseWhoseAnswerWasDeleted() {
+        var row = piece(FeedbackDestination.CONVERSATION, FeedbackState.DELIVERED, AT);
+        var proof = result();
+        bind(row, proof);
+        authorize(proof);
+        answers().unbound(row, "Try a focused test.", AT.minusSeconds(5));
+
+        assertThat(ownHistory(row).body())
+                .as("a receipt with a write fence reads its words from the answer only")
+                .isNull();
+    }
+
     private FeedbackHistoryEntry ownHistory(Feedback row) {
         return history.forDeveloper(workspace.getId(), developerId, AT.minusSeconds(1), 10).stream()
                 .filter(entry -> entry.feedbackId().equals(row.getId()))

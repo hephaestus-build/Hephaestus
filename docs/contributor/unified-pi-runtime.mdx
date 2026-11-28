@@ -323,14 +323,15 @@ The database function `conversation_receipt_words` holds this rule.
 The receipt query and the trigger that guards `feedback_copy` both use it.
 A receipt that the store refuses for good leaves the copy claimed, so the feedback stays `UNCONFIRMED`.
 
-Hephaestus's feedback history and the account export read the words through `conversation_receipt_words`, never from `feedback_copy.body`.
+Hephaestus's feedback history and the account export read the words through `conversation_receipt_words`, not from `feedback_copy.body`.
 When a redaction erases the answer or its `show_feedback` result, the function returns no words.
 Then those readers show none.
 The copy still stores the words, so a server of the previous release can read them while an upgrade rolls.
 The person export of a data request also copies them from `feedback_copy.body`.
 Issue #5504 removes them.
+
 A receipt that the 1.0 upgrade brought from 0.x has no answer and no `write_started_at`.
-Its stored words have no other home, so those readers show them for that case only.
+Its stored words have no other home, so the feedback history and the account export show them in that case only.
 
 An unconfirmed or failed piece is no longer `READY`.
 Thus, no later turn or later attempt lists it or shows it again.

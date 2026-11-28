@@ -89,6 +89,28 @@ class FeedbackConversationExportIntegrationTest extends AbstractFeedbackIntegrat
                 .doesNotContain("Try a focused test.");
     }
 
+    @Test
+    void shouldExportTheStoredWordsOfAReceiptThatThe10UpgradeBroughtFrom0x() {
+        var row = piece(FeedbackDestination.CONVERSATION, FeedbackState.DELIVERED, AT);
+        new ShownConversationAnswers(jdbc, transactionManager, owners)
+                .unbound(row, "Words that the upgrade kept on the receipt.", null);
+
+        assertThat(piecesOf(export().bundle(), row))
+                .as("the copy is the only home of a migrated receipt's words")
+                .singleElement()
+                .satisfies(piece -> assertThat(piece.path("body").asString())
+                        .isEqualTo("Words that the upgrade kept on the receipt."));
+    }
+
+    @Test
+    void shouldExportNoWordsOfAReceiptOfThisReleaseWhoseAnswerWasDeleted() {
+        var row = piece(FeedbackDestination.CONVERSATION, FeedbackState.DELIVERED, AT);
+        new ShownConversationAnswers(jdbc, transactionManager, owners)
+                .unbound(row, "Try a focused test.", AT.minusSeconds(5));
+
+        assertNoWordsIn(export(), row);
+    }
+
     /** A ready export and its bundle. */
     private record Download(long id, JsonNode bundle) {}
 

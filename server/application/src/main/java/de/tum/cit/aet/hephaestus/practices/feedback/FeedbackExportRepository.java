@@ -30,7 +30,7 @@ public interface FeedbackExportRepository extends Repository<Feedback, UUID> {
 
     /**
      * The posted pieces of these feedback rows, in order. A conversation receipt's words are read from its answer
-     * ({@code conversation_receipt_words}), never from the copy, so a redacted answer shows none. A receipt that the 1.0
+     * ({@code conversation_receipt_words}), not from the copy, so a redacted answer shows none. A receipt that the 1.0
      * upgrade brought from 0.x has no answer and no write fence: its copy is the only home of its words.
      */
     @WorkspaceAgnostic("The self-service export reads the account's own feedback in every workspace")
