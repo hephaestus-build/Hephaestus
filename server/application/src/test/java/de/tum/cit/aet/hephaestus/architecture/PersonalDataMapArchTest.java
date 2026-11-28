@@ -206,6 +206,12 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
                     "team_snapshot",
                     "Submitted team content (ADR 0165). Snapshot writes come only in a release after the registration"),
             Map.entry(
+                    "team_element",
+                    "Submitted team content (ADR 0165). Element writes come only in a release after the registration"),
+            Map.entry(
+                    "team_context",
+                    "Submitted team notes (ADR 0165). Note writes come only in a release after the registration"),
+            Map.entry(
                     "slack_dm_producer_pin",
                     "Slack DM producer pins stay empty until the erasure inventory registers the store"));
 
