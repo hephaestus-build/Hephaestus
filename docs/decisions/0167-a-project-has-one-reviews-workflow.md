@@ -42,7 +42,7 @@ An admin who configures reviews must not read a team's content because of that r
    - The server sets `requestedBy` from the signed-in account. It is never a body field. A `SCHEDULE` review has no requester.
    - The same `requestKey` returns the same review. The server refuses the same key with another input. The scheduler derives its key from the setup and the due time, so one due time gives one review.
    - The request has no audience and no budget. Both come from the setup.
-   - A pull request or an issue at a revision keeps its own review. An event, a member's request, a recurring check or a backfill starts it (ADR 0085 decision 6). A trial is an admin's try of one practice (ADR 0118). It does not enter this request in 1.0.
+   - A pull request or an issue at a revision keeps its own review, and it does not enter this request in 1.0. An event, a member's request, a recurring check or a backfill starts it (ADR 0085 decision 6). A trial is an admin's try of one practice (ADR 0118).
 2. **One record.** The existing `review` row gains `setup_id`, `version_kind`, `audience` and `audience_team_id`.
    - `version_kind` is `REPOSITORY_COMMIT`, `SUBMITTED_VERSION` or `ITEM_REVISION`.
    - `audience` is `OPERATIONAL`, `TEAM` or `PERSONAL`. `audience_team_id` is set only when the audience is `TEAM`.
@@ -56,7 +56,7 @@ An admin who configures reviews must not read a team's content because of that r
    - A request for anything more gets the same answer as a review that does not exist. This includes the observations, problems, evidence text, discussion and guidance, and the submitted version with its title and snapshots.
    - An export holds only what its reader may read.
    - A `TEAM` review of a repository needs an admin to map the repository to the team project first (`team_project_repository`). When the mapping is removed, later reviews cannot be `TEAM` reviews. No earlier review changes.
-4. **One read model.** The history, detail and comparison of each review extend `ReviewSummaryDTO` and `ReviewDetailDTO`. The schedule of a setup extends `ReviewScheduleDTO`. No second DTO family exists for an audience or for a kind of item. A contract test with a JSON fixture holds the field shapes. Until the cutover, the scan routes and their DTOs (`ScanSummaryDTO`, `ScanDetailDTO` and the scan report) stay as today's operational view.
+4. **One read model.** The history, detail and comparison of each review that a setup starts extend `ReviewSummaryDTO` and `ReviewDetailDTO`. The schedule of a setup extends `ReviewScheduleDTO`. No second DTO family exists for an audience or for a kind of item. A contract test with a JSON fixture holds the field shapes. Until the cutover, the scan routes and their DTOs (`ScanSummaryDTO`, `ScanDetailDTO` and the scan report) stay as today's operational view. The DTOs of a person's reviews and of trials stay as they are.
 5. **Coverage counts the planned pairs of each practice as reviewed, reused, withheld or not reviewed, for each level.**
    - A practice reviews at one level: the item itself (the repository at its commit, or the submitted version), or each listed member of the item (a file of the repository). A setup for a repository can select practices of both levels. An item-level practice reviews the repository item at the commit, with the evidence pinned for it.
    - Member observations never add up to an observation about the item.
@@ -68,7 +68,7 @@ An admin who configures reviews must not read a team's content because of that r
    - `evidence`: same, changed or unknown.
    - `setup`: same, or changed. The setup changes when the selector or review digest of a practice changes, or its method. An edit that keeps the review digest, such as new guidance, keeps the setup the same.
    - Two reviews of one commit with different pinned evidence read "Same commit, evidence changed", never "Code changed".
-   - A problem is Absent only by today's rule. The newer review judged its pair of a changed version from a complete, trusted read with a decided outcome, and neither observation is marked. When the newer review did not review a pair, the pair is Not reviewed. Missing coverage is never improvement.
+   - A problem is Absent only by today's rule. The practice is comparable, and the baseline's listing was complete. The newer review judged its pair of a changed version from a complete, trusted read with a decided outcome. Neither observation is marked, and the reader may read both. When the newer review did not review a pair, the pair is Not reviewed. Missing coverage is never improvement.
 7. **At seal, the audience chooses one producer** (ADR 0160 decision 1).
    - `OPERATIONAL`: `OBSERVATIONS`. No composer runs, and no feedback goes out. The report is its view.
    - `TEAM`: `TEAM` for a `REQUEST` review when the conditions of ADR 0165 hold, and `OBSERVATIONS` otherwise. A `SCHEDULE` review never composes.
@@ -96,7 +96,7 @@ An admin who configures reviews must not read a team's content because of that r
 ## Consequences
 
 - Good: one history holds a team's repository and its submitted work, and the readers are fixed at creation.
-- Good: the scan inventory, reuse, budget and SARIF do not change. The comparison keeps its rules and gains the evidence and setup sides.
+- Good: the scan inventory, reuse, budget and SARIF do not change. The comparison keeps its rules, and it gains the evidence side.
 - Good: a scheduled and a requested review of one setup are two reviews in one history, each with its origin.
 - Bad: `review`, a large table, gets an expand migration now and a contract step later.
 - Bad: admins cannot read the content of the team reviews that they configure.
