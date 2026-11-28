@@ -215,7 +215,7 @@ class TeamElementContextStorageIntegrationTest extends BaseIntegrationTest {
                     .as(override.toString())
                     .isInstanceOf(DataIntegrityViolationException.class);
         }
-        for (String text : List.of("'  '", "repeat('a', 10001)")) {
+        for (String text : List.of("'  '", "chr(9) || chr(10)", "repeat('a', 10001)")) {
             assertThatThrownBy(() -> transactions.executeWithoutResult(
                             status -> note(version(student).version(), text)))
                     .as(text)
