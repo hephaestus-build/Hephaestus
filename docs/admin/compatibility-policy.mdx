@@ -126,11 +126,8 @@ One-click unsubscribe requests send `List-Unsubscribe=One-Click` as form data.
 | **Patch** (x.y.`Z`) | Bug and security fixes. The upgrade needs no action.                                                                                                                                                                                                                                                           |
 
 :::caution[CAUTION: Pre-1.0]
-Below 1.0.0, the **Minor** row above does not apply.
-There are no major releases yet.
-Breaking changes occur in minor releases (`0.x.0` → `0.y.0`), per
-[SemVer item 4](https://semver.org/#spec-item-4).
-A pre-1.0 minor release can require action.
+Before 1.0.0, the table above does not apply.
+A [release candidate](#release-candidates-before-100) can require action.
 The release notes state the required action.
 This exception ends with the 1.0.0 release.
 
@@ -229,6 +226,21 @@ Upgrade to the latest 1.0.0 release candidate, or to 1.0.0 when it is released. 
 
 Fixes ship as new releases on top of the current version. There are no backport branches.
 If you find a bug on an older version, upgrade to the latest release before you report it.
+
+### Release candidates before 1.0.0
+
+Until 1.0.0, Hephaestus publishes its releases as `1.0.0-rc.N` release candidates.
+Run the latest candidate, also in production.
+A `0.x`, `1.0.0-beta` or `1.0.0-preview` version [sorts below](https://semver.org/#spec-item-11) every candidate.
+A move to such a version is a downgrade, which Hephaestus does not support.
+
+- A release candidate is not feature-complete. Later candidates add features.
+- A feature that is not yet part of 1.0.0 ships switched off.
+- Each candidate has [signed images, provenance and SBOMs](./release-image-lock) that you can verify.
+- Each candidate passes an [upgrade test with seeded data](../contributor/database-migration#ci-validation) before publication.
+- The upgrade to the next candidate is rolling, unless the [upgrade table](./upgrade#choose-a-rolling-or-a-stopped-upgrade) selects a stopped one.
+- The compatibility promise of 1.x starts at 1.0.0.
+- The upgrade from the last candidate to 1.0.0 is one [stopped upgrade](./upgrade-to-1-0).
 
 ### Support for 1.x
 
