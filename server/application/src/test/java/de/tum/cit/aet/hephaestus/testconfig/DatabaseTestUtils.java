@@ -6,11 +6,14 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.RowSweepAdmission;
 import de.tum.cit.aet.hephaestus.core.tenancy.TenancyBypass;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import java.sql.SQLException;
+import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.locks.LockSupport;
 import java.util.stream.Collectors;
 import jdk.jfr.Category;
 import jdk.jfr.Event;
@@ -34,12 +37,17 @@ public class DatabaseTestUtils {
     private static final Set<String> IGNORED_TABLES =
             Set.of("databasechangelog", "databasechangeloglock", "shedlock", "provenance_signing_key", "system_secret");
 
+    /** How long the cleanup keeps asking for its table locks before it fails. */
+    private static final Duration LOCK_PATIENCE = Duration.ofSeconds(30);
+
+    private static final Duration LOCK_RETRY_PAUSE = Duration.ofMillis(10);
+
     @PersistenceContext
     private @Nullable EntityManager entityManager;
 
     private final TransactionTemplate transactionTemplate;
     private final IdentityRestrictionRepository restrictions;
-    private @Nullable String truncateStatement;
+    private @Nullable String applicationTables;
 
     public DatabaseTestUtils(
             PlatformTransactionManager transactionManager, IdentityRestrictionRepository restrictions) {
@@ -57,14 +65,36 @@ public class DatabaseTestUtils {
         return restrictions.saveAndFlush(restriction).getId();
     }
 
+    /**
+     * Empties every application table. The ledger listener of each cached test context can read them at any moment, and
+     * a read locks its tables in its own order. The cleanup therefore never waits for a table lock: it gets all of them
+     * at once or starts again, so it is never part of a deadlock.
+     */
     public void cleanDatabase() {
         DatabaseCleanupEvent event = new DatabaseCleanupEvent();
         event.begin();
         try {
-            transactionTemplate.executeWithoutResult(status -> truncateTables());
+            long deadline = System.nanoTime() + LOCK_PATIENCE.toNanos();
+            while (true) {
+                try {
+                    transactionTemplate.executeWithoutResult(status -> truncateTables());
+                    return;
+                } catch (RuntimeException failure) {
+                    if (!foundATableHeld(failure) || System.nanoTime() - deadline > 0) throw failure;
+                    LockSupport.parkNanos(LOCK_RETRY_PAUSE.toNanos());
+                }
+            }
         } finally {
             event.commit();
         }
+    }
+
+    /** PostgreSQL's {@code lock_not_available}, which {@code NOWAIT} raises for a held table. */
+    private static boolean foundATableHeld(Throwable failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof SQLException sql && "55P03".equals(sql.getSQLState())) return true;
+        }
+        return false;
     }
 
     @Name("hephaestus.test.DatabaseCleanup")
@@ -76,10 +106,16 @@ public class DatabaseTestUtils {
     private void truncateTables() {
         EntityManager currentEntityManager = Objects.requireNonNull(entityManager);
         currentEntityManager.flush();
-        String statement = getTruncateStatement();
-        if (!statement.isEmpty()) {
+        String tables = getApplicationTables();
+        if (!tables.isEmpty()) {
             try (var ignored = TenancyBypass.open("Clear fixture rows in the integration database")) {
-                currentEntityManager.createNativeQuery(statement).executeUpdate();
+                currentEntityManager
+                        .createNativeQuery("LOCK TABLE " + tables + " IN ACCESS EXCLUSIVE MODE NOWAIT")
+                        .executeUpdate();
+                // Singleton caches outlive database cleanup. Never reuse ids for different rows in one context.
+                currentEntityManager
+                        .createNativeQuery("TRUNCATE TABLE " + tables + " CASCADE")
+                        .executeUpdate();
                 currentEntityManager
                         .createNativeQuery("DELETE FROM system_secret WHERE name <> :sweepKey")
                         .setParameter("sweepKey", RowSweepAdmission.KEY_NAME)
@@ -89,17 +125,15 @@ public class DatabaseTestUtils {
         currentEntityManager.clear();
     }
 
-    private synchronized String getTruncateStatement() {
-        if (truncateStatement == null) {
-            // Singleton caches outlive database cleanup. Never reuse ids for different rows in one context.
-            truncateStatement = fetchApplicationTables().stream()
+    /** The application tables as one comma-separated list, or an empty string. */
+    private synchronized String getApplicationTables() {
+        if (applicationTables == null) {
+            applicationTables = fetchApplicationTables().stream()
                     .sorted()
                     .map(this::quoteIdentifier)
-                    .collect(Collectors.collectingAndThen(
-                            Collectors.joining(", "),
-                            tables -> tables.isEmpty() ? "" : "TRUNCATE TABLE " + tables + " CASCADE"));
+                    .collect(Collectors.joining(", "));
         }
-        return Objects.requireNonNull(truncateStatement);
+        return Objects.requireNonNull(applicationTables);
     }
 
     @SuppressWarnings("unchecked")
