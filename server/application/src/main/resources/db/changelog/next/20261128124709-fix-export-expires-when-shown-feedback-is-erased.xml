@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1795581709990-1" author="hephaestus">
+        <comment>The feedback history and the account export read the words of a conversation receipt from its answer (conversation_receipt_words), which shows none once the answer or its show_feedback result is redacted. A ready export holds those words, so the erasure of the show_feedback result expires it, as the erasure of the answer does.</comment>
+        <sql splitStatements="false"><![CDATA[
+DROP TRIGGER trg_conversation_entry_changed_exports ON public.conversation_entry;
+CREATE TRIGGER trg_conversation_entry_changed_exports
+    AFTER UPDATE OF redacted_at, edited_at ON public.conversation_entry
+    FOR EACH ROW
+    WHEN (OLD.redacted_at IS NULL
+          AND (OLD.kind IN ('USER', 'ANSWER', 'DIGEST')
+               OR (OLD.kind = 'TOOL_RESULT' AND OLD.payload -> 'message' ->> 'toolName' = 'show_feedback'))
+          AND (NEW.redacted_at IS NOT NULL OR NEW.edited_at IS DISTINCT FROM OLD.edited_at))
+    EXECUTE FUNCTION public.account_export_message_changed();
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+DROP TRIGGER trg_conversation_entry_changed_exports ON public.conversation_entry;
+CREATE TRIGGER trg_conversation_entry_changed_exports
+    AFTER UPDATE OF redacted_at, edited_at ON public.conversation_entry
+    FOR EACH ROW
+    WHEN (OLD.redacted_at IS NULL AND OLD.kind IN ('USER', 'ANSWER', 'DIGEST')
+          AND (NEW.redacted_at IS NOT NULL OR NEW.edited_at IS DISTINCT FROM OLD.edited_at))
+    EXECUTE FUNCTION public.account_export_message_changed();
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

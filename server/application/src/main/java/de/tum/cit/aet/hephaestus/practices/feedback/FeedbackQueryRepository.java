@@ -91,11 +91,14 @@ public interface FeedbackQueryRepository extends Repository<Feedback, UUID> {
         """;
 
     /**
-     * The conversation that each piece's first posted chat copy was shown in, to the piece's own developer. A
-     * piece without one is absent.
+     * The conversation that each piece's first posted chat copy was shown in, to the piece's own developer, and the
+     * words that its answer shows for the piece, read from the answer ({@code conversation_receipt_words}) and never
+     * from the copy: once the answer is redacted, they are none. A piece without such a copy is absent.
      */
     @Query(value = """
-        SELECT DISTINCT ON (c.feedback_id) c.feedback_id AS "feedbackId",e.conversation_id AS "conversationId"
+        SELECT DISTINCT ON (c.feedback_id) c.feedback_id AS "feedbackId",e.conversation_id AS "conversationId",
+          conversation_receipt_words(c.workspace_id,c.feedback_id,c.conversation_entry_id,c.conversation_turn_id)
+            AS "words"
         FROM feedback_copy c
         JOIN conversation_entry e ON e.id=c.conversation_entry_id AND e.workspace_id=c.workspace_id
         JOIN conversation mc ON mc.id=e.conversation_id AND mc.workspace_id=e.workspace_id
@@ -112,6 +115,9 @@ public interface FeedbackQueryRepository extends Repository<Feedback, UUID> {
         UUID getFeedbackId();
 
         UUID getConversationId();
+
+        @Nullable
+        String getWords();
     }
 
     @Query(

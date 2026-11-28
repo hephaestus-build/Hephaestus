@@ -44,6 +44,12 @@ final class NativePracticeFixture {
         return database;
     }
 
+    /** Seeds the feedback parent rows into a database that a migration test upgraded only part of the way. */
+    static void seedFeedbackParent(TestDatabase database) {
+        seed(database, "result-parent.sql");
+        seed(database, "feedback-parent.sql");
+    }
+
     private static void seed(TestDatabase database, String file) {
         new ResourceDatabasePopulator(new ClassPathResource("db/practice-native/" + file))
                 .execute(new DriverManagerDataSource(database.jdbcUrl(), database.username(), database.password()));

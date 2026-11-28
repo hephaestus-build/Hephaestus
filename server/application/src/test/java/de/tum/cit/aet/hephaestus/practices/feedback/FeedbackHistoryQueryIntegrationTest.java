@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.context.providers.conversation.DeliveredFeedbackContentSource;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLedgerFixtures;
 import de.tum.cit.aet.hephaestus.conversation.ConversationLinkDTO;
+import de.tum.cit.aet.hephaestus.conversation.ConversationRedaction;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTimeline;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
@@ -51,6 +52,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
+import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -89,6 +91,12 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
 
     @Autowired
     OwnerScope owners;
+
+    @Autowired
+    ConversationRedaction redaction;
+
+    @Autowired
+    SqlStatementCounter statements;
 
     @Autowired
     FeedbackRepair repairs;
@@ -1084,42 +1092,15 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
         var proof = result();
         bind(row, proof);
         authorize(proof);
-        UUID conversation = UUID.randomUUID(), answer = UUID.randomUUID();
+        var shown = answers().show(row, "Try a focused test.");
         var transaction = new TransactionTemplate(transactionManager);
-        transaction.executeWithoutResult(status -> {
-            owners.ofJob(developerId);
-            jdbc.update(
-                    "INSERT INTO conversation(id,workspace_id,account_id,created_at,last_activity_at)"
-                            + " VALUES (?,?,?,now(),now())",
-                    conversation,
-                    workspace.getId(),
-                    developerId);
-            jdbc.update(
-                    "INSERT INTO conversation_entry(id,workspace_id,conversation_id,account_id,seq,kind,surface,text,"
-                            + "created_at) VALUES (?,?,?,?,1,'ANSWER','APP','Try a focused test.',now())",
-                    answer,
-                    workspace.getId(),
-                    conversation,
-                    developerId);
-            UUID id = FeedbackIds.copy(row.getId(), FeedbackCopyKind.CHAT_TURN, 0);
-            copies.saveAndFlush(FeedbackCopy.builder()
-                    .id(id)
-                    .workspaceId(workspace.getId())
-                    .feedbackId(row.getId())
-                    .kind(FeedbackCopyKind.CHAT_TURN)
-                    .state(FeedbackCopyState.POSTED)
-                    .body("Try a focused test.")
-                    .writeKey(id.toString())
-                    .writeStartedAt(AT)
-                    .postedAt(AT)
-                    .conversationEntryId(answer)
-                    .createdAt(AT)
-                    .build());
-        });
         var entry = history.forDeveloper(workspace.getId(), developerId, AT.minusSeconds(1), 1)
                 .getFirst();
-        assertThat(entry.body()).isEqualTo("Try a focused test.").isNotEqualTo(row.getBody());
-        assertThat(entry.threadId()).isEqualTo(conversation);
+        assertThat(entry.body())
+                .as("the words that the answer showed, not the prepared body")
+                .isEqualTo("Try a focused test.")
+                .isNotEqualTo(row.getBody());
+        assertThat(entry.threadId()).isEqualTo(shown.conversation());
         assertThat(entry.publicHistory()).isNull();
 
         long other =
@@ -1137,6 +1118,101 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
                         List.of(row, Feedback.builder().developerId(other).build())))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("A conversation history read requires one developer.");
+    }
+
+    @Test
+    void shouldShowTheAnswerWordsOnlyWhileTheAnswerStands() {
+        var row = piece(FeedbackDestination.CONVERSATION, FeedbackState.DELIVERED, AT);
+        var proof = result();
+        bind(row, proof);
+        authorize(proof);
+        var shown = answers().show(row, "Try a focused test.");
+        assertThat(copies.findById(FeedbackIds.copy(row.getId(), FeedbackCopyKind.CHAT_TURN, 0))
+                        .orElseThrow()
+                        .getBody())
+                .as("the receipt still holds the words; the history reads them from the answer")
+                .isEqualTo("Try a focused test.");
+        assertThat(ownHistory(row).body()).isEqualTo("Try a focused test.");
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            owners.ofJob(developerId);
+            redaction.redact(List.of(shown.answer()));
+        });
+
+        var redacted = ownHistory(row);
+        assertThat(redacted.body())
+                .as("the redaction erased the only home of the words")
+                .isNull();
+        assertThat(redacted.state()).isEqualTo(FeedbackState.DELIVERED);
+        assertThat(redacted.deliveredAt()).isEqualTo(AT);
+        assertThat(feedback.findById(row.getId()).orElseThrow().getState()).isEqualTo(FeedbackState.DELIVERED);
+    }
+
+    @Test
+    void shouldReadTheWordsOfAPageOfConversationPiecesInOneQueryAsTheirDeveloper() {
+        List<Feedback> rows = new ArrayList<>();
+        for (int index = 0; index < 3; index++) {
+            var row = piece(FeedbackDestination.CONVERSATION, FeedbackState.DELIVERED, AT);
+            var proof = result();
+            bind(row, proof);
+            authorize(proof);
+            answers().show(row, "Shown words " + index + ".");
+            rows.add(row);
+        }
+
+        var measured = statements.measureOwners(
+                () -> history.forDeveloper(workspace.getId(), developerId, AT.minusSeconds(1), 10));
+
+        assertThat(measured.value())
+                .extracting(FeedbackHistoryEntry::feedbackId, FeedbackHistoryEntry::body)
+                .containsExactlyInAnyOrder(
+                        tuple(rows.get(0).getId(), "Shown words 0."),
+                        tuple(rows.get(1).getId(), "Shown words 1."),
+                        tuple(rows.get(2).getId(), "Shown words 2."));
+        assertThat(measured.prepared())
+                .filteredOn(statement -> statement.sql().contains("conversation_receipt_words"))
+                .as("one read of the words for the page, never one per piece")
+                .singleElement()
+                .satisfies(statement -> assertThat(statement.owner())
+                        .as("the words are read as the developer whose conversation holds them")
+                        .isEqualTo(developerId));
+    }
+
+    @Test
+    void shouldShowTheStoredWordsOfAReceiptThatThe10UpgradeBroughtFrom0x() {
+        var row = piece(FeedbackDestination.CONVERSATION, FeedbackState.DELIVERED, AT);
+        var proof = result();
+        bind(row, proof);
+        authorize(proof);
+        answers().unbound(row, "Words that the upgrade kept on the receipt.", null);
+
+        assertThat(ownHistory(row).body())
+                .as("the copy is the only home of a migrated receipt's words")
+                .isEqualTo("Words that the upgrade kept on the receipt.");
+    }
+
+    @Test
+    void shouldShowNoWordsOfAReceiptOfThisReleaseWhoseAnswerWasDeleted() {
+        var row = piece(FeedbackDestination.CONVERSATION, FeedbackState.DELIVERED, AT);
+        var proof = result();
+        bind(row, proof);
+        authorize(proof);
+        answers().unbound(row, "Try a focused test.", AT.minusSeconds(5));
+
+        assertThat(ownHistory(row).body())
+                .as("a receipt with a write fence reads its words from the answer only")
+                .isNull();
+    }
+
+    private FeedbackHistoryEntry ownHistory(Feedback row) {
+        return history.forDeveloper(workspace.getId(), developerId, AT.minusSeconds(1), 10).stream()
+                .filter(entry -> entry.feedbackId().equals(row.getId()))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private ShownConversationAnswers answers() {
+        return new ShownConversationAnswers(jdbc, transactionManager, owners);
     }
 
     @Test
