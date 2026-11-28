@@ -86,6 +86,23 @@ public interface MentorAttemptRepository extends Repository<MentorAttempt, UUID>
             @Param("lease") double leaseSeconds,
             @Param("maxClaims") int maxClaims);
 
+    /**
+     * Ends the account's queued or lapsed attempts that a newer request version replaced, as {@code VERSION_STALE}. The
+     * version only rises, so the request is read without a lock. A held lease fails its next dispatch check instead.
+     */
+    @Modifying
+    @Query(value = """
+            WITH stale AS (
+                SELECT a.id FROM mentor_attempt a
+                JOIN mentor_request r ON r.account_id = a.account_id AND r.id = a.request_id
+                WHERE a.account_id = :account AND r.version > a.request_version
+                    AND (a.state = 'QUEUED' OR (a.state = 'LEASED' AND a.leased_until <= clock_timestamp()))
+                FOR UPDATE OF a SKIP LOCKED)
+            UPDATE mentor_attempt t SET state = 'ENDED', end_reason = 'VERSION_STALE', ended_at = clock_timestamp()
+            FROM stale WHERE t.id = stale.id AND t.account_id = :account
+            """, nativeQuery = true)
+    int endStaleOrSkip(@Param("account") long account);
+
     /** Under the request lock that the claim holds. */
     @Modifying
     @Query(

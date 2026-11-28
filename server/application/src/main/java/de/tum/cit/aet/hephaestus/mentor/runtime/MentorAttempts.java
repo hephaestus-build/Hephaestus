@@ -36,7 +36,8 @@ public class MentorAttempts {
 
     /**
      * Leases up to {@code limit} due attempts of the class for one account. A claim never waits: a held owner row, request
-     * or attempt is skipped, and the next pass takes it.
+     * or attempt is skipped, and the next pass takes it. It also ends the account's attempts that a newer version
+     * replaced, unless a lease still holds them.
      */
     @Transactional
     public List<AttemptLease> claim(long account, WorkClass workClass, int limit, Duration lease) {
@@ -47,9 +48,11 @@ public class MentorAttempts {
         long room = Math.min(limit, OWNER_LEASES - live.getTotal());
         if (workClass == WorkClass.BACKGROUND) room = Math.min(room, OWNER_BACKGROUND - live.getBackground());
         var leases = new ArrayList<AttemptLease>();
-        if (room <= 0) return leases;
         // A few more candidates than room, so a skipped row does not leave a lease unclaimed this pass.
-        for (var due : attempts.due(account, workClass.name(), MentorAttempt.MAX_CLAIMS, (int) room * 2)) {
+        var candidates = room <= 0
+                ? List.<MentorAttemptRepository.Due>of()
+                : attempts.due(account, workClass.name(), MentorAttempt.MAX_CLAIMS, (int) room * 2);
+        for (var due : candidates) {
             if (leases.size() == room) break;
             if (attempts.lockLiveRequestOrSkip(account, due.getRequest(), due.getVersion())
                     .isEmpty()) continue;
@@ -68,6 +71,8 @@ public class MentorAttempts {
                     token,
                     leased.get().getLeasedUntil()));
         }
+        // After the request locks above, so the claim keeps the request before the attempt.
+        var _ = attempts.endStaleOrSkip(account);
         return leases;
     }
 

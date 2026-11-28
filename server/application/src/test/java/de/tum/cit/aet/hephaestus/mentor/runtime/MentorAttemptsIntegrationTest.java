@@ -155,6 +155,36 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
         assertThat(claim(WorkClass.INTERACTIVE, 1)).isEmpty();
     }
 
+    /** A newer version replaces the older attempt: the next claim ends it unless a lease still holds it. */
+    @Test
+    void shouldEndAReplacedAttemptAsStaleWhenTheNextClaimRunsUnlessALeaseHoldsIt() {
+        String lapsed = message();
+        String held = message();
+        String queued = message();
+        UUID lapsedRequest = ask(lapsed);
+        UUID heldRequest = ask(held);
+        claim(WorkClass.INTERACTIVE, 2).stream()
+                .filter(lease -> lease.requestId().equals(lapsedRequest))
+                .forEach(this::lapse);
+        UUID queuedRequest = ask(queued);
+        for (String message : List.of(lapsed, held, queued)) {
+            admit(IngressKind.MESSAGE_EDITED, "x" + message, message, "1700000000.000200");
+        }
+
+        assertThat(claim(WorkClass.INTERACTIVE, 1))
+                .singleElement()
+                .extracting(AttemptLease::requestVersion)
+                .isEqualTo(2);
+        for (UUID replaced : List.of(lapsedRequest, queuedRequest)) {
+            assertThat(attempt(replaced, 1))
+                    .containsEntry("state", "ENDED")
+                    .containsEntry("end_reason", "VERSION_STALE");
+            assertThat(attempt(replaced, 1).get("ended_at")).isNotNull();
+        }
+        assertThat(attempt(heldRequest, 1)).containsEntry("state", "LEASED");
+        assertThat(attempt(heldRequest, 1).get("end_reason")).isNull();
+    }
+
     /** Own: an account runs at most two leases, and background work never takes the one a question needs. */
     @Test
     void shouldKeepALeaseForAQuestionWhenBackgroundWorkIsDue() {
@@ -232,6 +262,11 @@ class MentorAttemptsIntegrationTest extends BaseIntegrationTest {
 
     private Map<String, @Nullable Object> attempt(UUID request) {
         return owner.queryForMap("SELECT * FROM mentor_attempt WHERE request_id = ?", request);
+    }
+
+    private Map<String, @Nullable Object> attempt(UUID request, int version) {
+        return owner.queryForMap(
+                "SELECT * FROM mentor_attempt WHERE request_id = ? AND request_version = ?", request, version);
     }
 
     private @Nullable String requestState(UUID request) {
