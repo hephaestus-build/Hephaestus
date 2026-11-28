@@ -3,6 +3,7 @@ packages:
   - webapp
   - docs
   - extension
+  - figma-plugin
   - scripts/api-generator
 
 linkWorkspacePackages: true

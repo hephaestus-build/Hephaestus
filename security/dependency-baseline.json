@@ -1,7 +1,7 @@
 {
 	"pnpm-lock.yaml": {
 		"envPackages": 15,
-		"packages": 1934,
+		"packages": 1933,
 		"importers": {
 			".": {
 				"direct": {
@@ -19,8 +19,8 @@
 					"dev": 10
 				},
 				"transitive": {
-					"prod": 640,
-					"all": 795
+					"prod": 639,
+					"all": 794
 				}
 			},
 			"extension": {
@@ -30,7 +30,7 @@
 				},
 				"transitive": {
 					"prod": 14,
-					"all": 890
+					"all": 889
 				}
 			},
 			"scripts/api-generator": {
@@ -51,6 +51,16 @@
 				"transitive": {
 					"prod": 214,
 					"all": 1176
+				}
+			},
+			"figma-plugin": {
+				"direct": {
+					"prod": 0,
+					"dev": 4
+				},
+				"transitive": {
+					"prod": 0,
+					"all": 108
 				}
 			}
 		}

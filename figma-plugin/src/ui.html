@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<style>
+			body { font: 13px/1.45 Inter, system-ui, sans-serif; margin: 12px; color: #1e1e1e; }
+			h1 { font-size: 14px; margin: 0 0 8px; }
+			p { margin: 0 0 8px; }
+			.quiet { color: #6b6b6b; }
+			details { margin-top: 16px; }
+			button { font: inherit; margin: 4px 4px 4px 0; }
+		</style>
+	</head>
+	<body>
+		<h1>Hephaestus</h1>
+		<p id="selection" role="status" aria-live="polite"></p>
+		<p class="quiet">Nothing leaves this file until you choose Request review.</p>
+		<details>
+			<summary>For instructors: a button on this section</summary>
+			<p class="quiet">It adds a “Review with Hephaestus” button to the selected section, frame or table. The node holds only that button.</p>
+			<button id="relaunch-add" type="button">Add the button</button>
+			<button id="relaunch-remove" type="button">Remove the button</button>
+			<p id="relaunch-status" role="status" aria-live="polite"></p>
+		</details>
+		<script type="module" src="./ui.ts"></script>
+	</body>
+</html>

@@ -543,6 +543,21 @@ importers:
         specifier: 0.21.5
         version: 0.21.5(patch_hash=d10a10b9acda18891b4a868a545c209f3450fff5046871ac09bed66b4a825c7f)(@rspack/core@1.7.12(@swc/helpers@0.5.24))(@voidzero-dev/vite-plus-core@1.4.0(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))(esbuild@0.28.2)(eslint@10.14.0(jiti@2.7.0)(supports-color@8.1.1))(oxc-parser@0.148.0)(rolldown@1.2.19)(typescript@7.0.2)(webpack@5.112.2(@swc/core@1.16.20(@swc/helpers@0.5.24))(@swc/html@1.16.20)(clean-css@5.3.3)(cssnano@6.1.2(postcss@8.5.32))(csso@5.0.5)(esbuild@0.28.2)(html-minifier-terser@7.2.0)(lightningcss@1.33.0)(postcss@8.5.32)(svgo@4.1.0))
 
+  figma-plugin:
+    devDependencies:
+      '@figma/plugin-typings':
+        specifier: 1.143.0
+        version: 1.143.0
+      '@types/node':
+        specifier: 24.19.2
+        version: 24.19.2
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vite:
+        specifier: 'catalog:'
+        version: '@voidzero-dev/vite-plus-core@1.4.0(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)'
+
   scripts/api-generator:
     devDependencies:
       '@hey-api/openapi-ts':
@@ -1878,6 +1893,9 @@ packages:
     peerDependenciesMeta:
       '@noble/hashes':
         optional: true
+
+  '@figma/plugin-typings@1.143.0':
+    resolution: {integrity: sha512-7oP0XwTiuAuQPRNmuPX4PeRP5fjLMnRZ6Ed7Ybr61JoW9Os04Eml/XqYE3kyvohcFQfYXsRK5sqCLaKzc8qnZg==}
 
   '@floating-ui/core@1.8.0':
     resolution: {integrity: sha512-0CIZ5itps/8x7BG8dEIhs53BvCUH2PCoogtakwRTut+Arm58sJooJ0AuZhLw2HJYIR5cMLNPBSS728sPho2khQ==}
@@ -11265,6 +11283,8 @@ snapshots:
   '@exodus/bytes@1.16.0(@noble/hashes@1.8.0)':
     optionalDependencies:
       '@noble/hashes': 1.8.0
+
+  '@figma/plugin-typings@1.143.0': {}
 
   '@floating-ui/core@1.8.0':
     dependencies:

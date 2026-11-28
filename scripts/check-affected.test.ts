@@ -276,6 +276,14 @@ await test("selects the Node runtime and practice script trees", () => {
 	);
 });
 
+await test("selects the tooling scope for the Figma plugin, whose gates and tests run with the tooling", async () => {
+	assert.deepEqual(scopesFor(["figma-plugin/src/code.ts", "figma-plugin/manifest.json"]), [
+		"agents",
+	]);
+	const globs = await filterGlobs("tooling");
+	assert.ok(globs.includes("figma-plugin/**"), "the CI tooling filter must run the plugin's gates");
+});
+
 await test("selects the tooling tests for the bundled catalog and guidance they judge", async () => {
 	const globs = await filterGlobs("tooling");
 	const practices = "server/application/src/main/resources/practices/";

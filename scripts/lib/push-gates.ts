@@ -6,6 +6,7 @@ export const agentStaticGates = [
 	"gate:agents-lint",
 	"gate:agents-typecheck",
 	"gate:scripts-typecheck",
+	"gate:figma-plugin-typecheck",
 ];
 export const docsStaticGates = ["gate:docs-format", "gate:docs-lint"];
 export const webappGates = ["gate:webapp", "gate:webapp-format", "gate:components", "gate:stories"];
