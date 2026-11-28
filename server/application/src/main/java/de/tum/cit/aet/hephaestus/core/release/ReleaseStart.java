@@ -13,7 +13,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.jspecify.annotations.Nullable;
 
-/** A release the server role started on this instance, recorded when it differs from the one before. */
+/**
+ * A release start recorded by a release before rollout activations ({@link ReleaseActivation}). Nothing writes or
+ * reads it any more; the table stays so that a downgraded server's start does not fail on a missing table.
+ */
 @Entity
 @Table(name = "release_start")
 @Getter

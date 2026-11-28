@@ -162,12 +162,7 @@ public class ReleaseCheckService {
             status = ReleaseCheckStatus.UPDATE_AVAILABLE;
         } else status = ReleaseCheckStatus.CURRENT;
         var recent = history.recent();
-        // Only the newest start can be this one: an older match is an earlier run of the same release.
-        Instant runningSince = recent.stream()
-                .findFirst()
-                .filter(start -> ReleaseHistory.describes(start, identity))
-                .map(ReleaseStart::getStartedAt)
-                .orElse(null);
+        Instant runningSince = history.runningSince(recent);
         return new ReleaseStatusDTO(
                 identity,
                 status,

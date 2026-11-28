@@ -536,8 +536,8 @@ await test("the server serves the operator's legal pages from a read-only Config
 });
 
 await test("sandbox identities and other roles do not receive an API token", () => {
-	// No ServiceAccount mounts a token by default. Only the server Pod mounts one, and only with sandboxes or backups
-	// (the rendered cases: kubernetes-chart-render-database.test.ts).
+	// No ServiceAccount mounts a token by default. Only the server Pod mounts one, and only with sandboxes, backups or
+	// a stated API endpoint (the rendered cases: kubernetes-chart-render-database.test.ts).
 	for (const { name, source: text } of templates) {
 		const accounts = text.split(/^---$/mu).filter((part) => /^kind: ServiceAccount$/mu.test(part));
 		for (const account of accounts.filter(
@@ -546,10 +546,7 @@ await test("sandbox identities and other roles do not receive an API token", () 
 			assert.match(account, /automountServiceAccountToken: false/u, name);
 		}
 	}
-	assert.match(
-		source("server.yaml"),
-		/automountServiceAccountToken: \{\{ or \$sandbox\.enabled \$backups \}\}/u,
-	);
+	assert.match(source("server.yaml"), /automountServiceAccountToken: \{\{ \$api \}\}/u);
 });
 
 await test("chart list inputs require arrays of non-empty strings without commas", () => {

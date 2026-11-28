@@ -33,8 +33,40 @@ It sends no version, credential, workspace data or configuration. GitHub sees th
 On an air-gapped host, set `config.releaseCheckEnabled: false` in `site.yaml`, and upgrade the release with it.
 The card then shows the release without a check.
 
-The card also shows when this instance first started its release.
-**Show release history** lists the last ten releases that the server started, newest first.
+The card also shows since when the running rollout is active.
+**Show release history** lists the last ten rollouts of the server in this deployment environment, newest first, each with its revision.
+
+Kubernetes numbers the rollouts of a Deployment: each one gets the next revision, and its ReplicaSet carries it in the annotation `deployment.kubernetes.io/revision`.
+Each ready server reads the revision of its own ReplicaSet when it becomes ready and then every minute. It records each revision that it reads once, with the time of the database clock.
+The revisions of one Deployment order its entries.
+Compare them with `kubectl rollout history deployment/<release>-server`.
+
+The history shows the revisions that a server read, not every revision of the Deployment:
+
+- An entry can appear up to a minute late. This happens when a rollout revises a ReplicaSet whose Pods keep running.
+- A revision that no server read is missing, and the revisions then have a gap. For example, an undo, a retried upgrade and a second undo can all happen within one minute. The surviving Pods then read only the last revision.
+- The order assumes that Kubernetes keeps the revision sequence of the Deployment. If you delete every ReplicaSet but keep the Deployment, Kubernetes can number the next rollout 1 again. That rollout then adds no entry.
+
+With the Kubernetes API, these rules apply:
+
+- **A restart adds nothing.** A restarted server, also an old one during a rollout, reads the revision of its ReplicaSet, which is already recorded.
+- **A rollback adds an entry.** `helm rollback` and `kubectl rollout undo` scale an earlier ReplicaSet up again, and Kubernetes gives it the next revision. The entry names the earlier release.
+- **`kubectl rollout restart` adds an entry.** It changes the pod template, so it is a rollout with a new revision. The entry names the same release.
+- **A new install starts a new order.** A fresh install has a new Deployment, whose revisions start at 1 again. A restore into a new cluster is one example. Its entries come after the entries of the earlier Deployment.
+- **A stop adds nothing.** A scale to zero or a node restart starts the same ReplicaSet again.
+
+The time of an entry is when its first server recorded it. If that server could not write at first, the time is later, but the entry keeps its place below the later revisions.
+The history starts with this release. Entries from earlier releases are not shown.
+The database keeps the 100 most recently recorded entries of each deployment environment, and the highest revision of each Deployment.
+
+The server needs the Kubernetes API to read its revision.
+The chart gives the server this access with `sandbox.enabled`, `postgresql.backup.enabled` or `networkPolicy.kubernetesApi` ([Helm chart](./helm-chart)).
+Without it, for example outside Kubernetes, each server start adds one entry without a revision. A restart then adds an entry too.
+Such an entry never sorts above the newest rollout, because a start without a revision cannot tell whether that rollout still runs. If the access comes back, later rollouts sort above those entries.
+
+If the server logs `release.history.failed`, it could not read its revision or write its entry. It tries again a minute later.
+Until a read succeeds, the card shows no start time for the running rollout, because the revision can have changed since the last read.
+
 `deploymentEnvironment` in `site.yaml` names the deployment, such as `production` or `staging`, on the card, in log lines and in traces.
 Use lowercase letters, digits, `.`, `_` or `-`, at most 64 characters: the server does not start with another value.
 If you do not set it, the instance reports `local`.

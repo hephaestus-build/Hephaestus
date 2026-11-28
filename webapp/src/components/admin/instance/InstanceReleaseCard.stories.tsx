@@ -223,16 +223,9 @@ export const WithHistory: Story = {
 			lastSuccess: hoursBefore(2),
 			runningSince: daysBefore(3),
 			history: [
-				{ ...running, startedAt: daysBefore(3) },
-				{ ...running, version: "1.3.0", startedAt: daysBefore(5) },
-				{ ...running, startedAt: daysBefore(20) },
-				{
-					version: "d".repeat(40),
-					channel: "COMMIT",
-					environment: "staging",
-					commit: "d".repeat(40),
-					startedAt: daysBefore(40),
-				},
+				{ ...running, id: 3, revision: 3, startedAt: daysBefore(3) },
+				{ ...running, id: 2, version: "1.3.0", revision: 2, startedAt: daysBefore(5) },
+				{ ...running, id: 1, revision: 1, startedAt: daysBefore(20) },
 			],
 		}),
 	},
@@ -241,9 +234,33 @@ export const WithHistory: Story = {
 			"Running in production, started 3 days ago.",
 		);
 		await userEvent.click(canvas.getByRole("button", { name: "Show release history" }));
-		await expect(canvas.getAllByRole("listitem")).toHaveLength(4);
+		await expect(canvas.getAllByRole("listitem")).toHaveLength(3);
 		await expect(canvas.getByText("v1.3.0")).toBeVisible();
-		await expect(canvas.getByText("in staging")).toBeVisible();
+		await expect(canvas.getByText("revision 2")).toBeVisible();
+		await expect(
+			canvas.getByText(/each rollout in production that a server read appears once/iu),
+		).toBeVisible();
+		await expect(canvas.queryByText(/an entry without a revision/iu)).toBeNull();
+	},
+};
+
+export const HistoryOfServerStarts: Story = {
+	args: {
+		state: ready({
+			status: "CURRENT",
+			lastSuccess: hoursBefore(2),
+			runningSince: hoursBefore(1),
+			history: [
+				{ ...running, id: 5, startedAt: hoursBefore(1) },
+				{ ...running, id: 4, version: "1.2.2", startedAt: daysBefore(2) },
+			],
+		}),
+	},
+	play: async ({ canvas }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "Show release history" }));
+		await expect(canvas.getAllByRole("listitem")).toHaveLength(2);
+		await expect(canvas.queryByText(/^revision/iu)).toBeNull();
+		await expect(canvas.getByText(/an entry without a revision is a server start/iu)).toBeVisible();
 	},
 };
 

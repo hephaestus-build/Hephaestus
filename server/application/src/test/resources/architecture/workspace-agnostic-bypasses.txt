@@ -229,9 +229,9 @@ de.tum.cit.aet.hephaestus.core.privacy.PrivacyJournalMaintenance
 de.tum.cit.aet.hephaestus.core.provenance.ProvenanceKeys
 de.tum.cit.aet.hephaestus.core.provenance.ProvenanceKeysController
 de.tum.cit.aet.hephaestus.core.provenance.ProvenanceSigningKeyRepository
+de.tum.cit.aet.hephaestus.core.release.ReleaseActivationRepository
 de.tum.cit.aet.hephaestus.core.release.ReleaseCheckService.poll()
-de.tum.cit.aet.hephaestus.core.release.ReleaseHistory.recordStart()
-de.tum.cit.aet.hephaestus.core.release.ReleaseStartRepository
+de.tum.cit.aet.hephaestus.core.release.ReleaseHistory.report()
 de.tum.cit.aet.hephaestus.core.security.StoredSystemSecretRepository
 de.tum.cit.aet.hephaestus.core.security.SystemKeyRotation.rotate()
 de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsRepository

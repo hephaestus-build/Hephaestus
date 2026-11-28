@@ -96,14 +96,11 @@ function ReleaseHistory({ release }: { release: ReleaseStatus }) {
 			<CollapsibleContent className="mt-2">
 				<ul className="space-y-1.5">
 					{release.history.map((entry) => (
-						<li
-							key={entry.startedAt.toISOString()}
-							className="flex min-w-0 items-center gap-2 text-sm"
-						>
+						<li key={entry.id} className="flex min-w-0 items-center gap-2 text-sm">
 							<span className="min-w-0 truncate font-mono">{releaseLabel(entry)}</span>
-							{entry.environment !== release.running.environment && (
-								<span className="min-w-0 truncate text-muted-foreground">
-									in {entry.environment}
+							{entry.revision !== undefined && (
+								<span className="shrink-0 text-xs text-muted-foreground">
+									revision {entry.revision}
 								</span>
 							)}
 							<RelativeTime
@@ -114,8 +111,11 @@ function ReleaseHistory({ release }: { release: ReleaseStatus }) {
 					))}
 				</ul>
 				<p className="mt-2 text-xs text-muted-foreground">
-					Each release appears when this instance first started it. A restart adds nothing. A
-					rollback adds the older release again.
+					Each rollout in {release.running.environment} that a server read appears once, with its
+					Kubernetes revision. A restart adds nothing, and a rollback adds an entry. A gap in the
+					revisions is a rollout that no server read.
+					{release.history.some((entry) => entry.revision === undefined) &&
+						" An entry without a revision is a server start that could not read its rollout. Each such start adds an entry."}
 				</p>
 			</CollapsibleContent>
 		</Collapsible>

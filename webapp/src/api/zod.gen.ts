@@ -3569,13 +3569,16 @@ export const zReleaseResearchDataset = z.object({
 });
 
 /**
- * A release the server role started on this instance.
+ * A rollout of the server Deployment, as its Deployment revision numbers it, or one server start where the server
+ * could not read its rollout.
  */
 export const zReleaseStart = z.object({
 	channel: zReleaseChannel,
 	commit: z.string().optional(),
 	environment: z.string(),
+	id: z.int(),
 	image: z.string().optional(),
+	revision: z.int().optional(),
 	startedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	version: z.string(),
 });

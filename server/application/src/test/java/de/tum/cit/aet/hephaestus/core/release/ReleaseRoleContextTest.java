@@ -23,7 +23,7 @@ class ReleaseRoleContextTest {
     private final ApplicationContextRunner context = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(RestClientAutoConfiguration.class))
             .withBean(Clock.class, Clock::systemUTC)
-            .withBean(ReleaseStartRepository.class, () -> mock(ReleaseStartRepository.class))
+            .withBean(ReleaseActivationRepository.class, () -> mock(ReleaseActivationRepository.class))
             .withBean(TransactionTemplate.class, () -> mock(TransactionTemplate.class))
             .withPropertyValues("spring.application.version=1.2.3")
             .withUserConfiguration(

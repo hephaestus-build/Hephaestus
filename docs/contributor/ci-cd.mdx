@@ -1670,6 +1670,18 @@ The drill requires removal of the old volume, checks the replacement node and re
 It applies clone lockdown before application roles restart.
 It preserves the cluster configuration and Secrets. It does not rehearse recovery of those files or an off-node host failure.
 
+## Release history drill
+
+The latest-minor `amd64` leg runs `scripts/release-history-drill.ts` nightly and on pull requests that change the server template of the chart or the drill.
+The `release-history` path filter owns those inputs.
+After the install and the upgrade, each recorded revision must be one that the cluster rolled out. The newest must be the running one.
+Then it deletes a server Pod, runs `helm rollback` to the install, and runs `kubectl rollout undo`.
+It requires that the restart adds no entry and that each rollback adds its new revision as the newest entry.
+
+The Helm leg runs before the kubectl leg. `kubectl rollout undo` takes over fields, and a later Helm change to them conflicts.
+The drill is the last step of the leg for the same reason. It rolls the release back twice, so merge groups skip it.
+A change to `core/release` alone does not start the Kubernetes legs. Its integration tests and the nightly run cover it.
+
 ## Workflow validation
 
 `Workflow lint` runs GitHub's parser, Actionlint and Zizmor in one job and blocks through `CI Status Gate`.
