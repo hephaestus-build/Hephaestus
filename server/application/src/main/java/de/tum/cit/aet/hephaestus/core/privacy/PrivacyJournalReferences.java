@@ -37,6 +37,7 @@ final class PrivacyJournalReferences {
             "shareId",
             "tokenId",
             "transferId",
+            "versionId",
             "workspaceId");
 
     private PrivacyJournalReferences() {}
@@ -134,7 +135,8 @@ final class PrivacyJournalReferences {
                 value instanceof String id && NATIVE_ID.matcher(id).matches();
             case "workspaceId", "accountId", "connectionId", "messageId", "repositoryId", "monitorId", "consentId" ->
                 positiveLong(value);
-            case "entryId", "keepTokenId", "keepSessionId", "sessionId", "tokenId", "grantId" -> value instanceof UUID;
+            case "entryId", "keepTokenId", "keepSessionId", "sessionId", "tokenId", "grantId", "versionId" ->
+                value instanceof UUID;
             case "externalCopiesRemoved" -> value instanceof Boolean;
             case "identities" ->
                 value instanceof List<?> entries

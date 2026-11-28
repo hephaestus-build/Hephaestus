@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredDisconnects;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredMessageDeletions;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredSlackChannelErasures;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredSlackMessageChanges;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredTeamWork;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredWorkspacePurges;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
@@ -860,6 +861,7 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
                             beans.getBean(RestoredCollectionErasures.class),
                             beans.getBean(RestoredSlackMessageChanges.class),
                             beans.getBean(RestoredSlackChannelErasures.class),
+                            beans.getBean(RestoredTeamWork.class),
                             new PersonDataRecoveryProperties(manifest.toString())));
             context.refresh();
             assertThat(context.getBean(PersonDataRecovery.class).isRunning()).isTrue();

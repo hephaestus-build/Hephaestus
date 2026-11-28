@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredDisconnects;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredMessageDeletions;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredSlackChannelErasures;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredSlackMessageChanges;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredTeamWork;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredWorkspacePurges;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
@@ -35,6 +36,11 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.RecordingPrivacyJournal;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
+import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
+import de.tum.cit.aet.hephaestus.workspace.MembershipService;
+import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -47,6 +53,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -155,6 +162,97 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldWithdrawAgainTheListedTeamWorkAndThatOfADepartedPerson() throws Exception {
+        Workspace courseWorkspace = workspace("recovery-course");
+        Workspace otherWorkspace = workspace("recovery-other");
+        long course = Objects.requireNonNull(courseWorkspace.getId());
+        long other = Objects.requireNonNull(otherWorkspace.getId());
+        long student = account("Student");
+        long departed = account("Departed");
+        var memberships = beans.getBean(MembershipService.class);
+        memberships.createMembership(courseWorkspace, student, WorkspaceRole.MEMBER);
+        memberships.createMembership(courseWorkspace, departed, WorkspaceRole.MEMBER);
+        memberships.createMembership(otherWorkspace, departed, WorkspaceRole.MEMBER);
+        UUID listed = teamVersion(course, student);
+        UUID kept = teamVersion(course, student);
+        UUID left = teamVersion(course, departed);
+        UUID elsewhere = teamVersion(other, departed);
+        UUID expired = teamVersion(course, student);
+        jdbc.update(
+                "UPDATE team_item_version SET state = 'EXPIRED', title = NULL WHERE id = ? AND workspace_id = ?",
+                expired,
+                course);
+        Path manifest = manifest("""
+                {"version":5,"recordDeletions":[],"slackMessageChanges":[],"slackChannelErasures":[],"workspacePurges":[],"disconnects":[],"collectionErasures":[],"messageDeletions":[],"restorePoint":"2026-01-01T00:00:00Z","people":[],"noLaterErasures":false,
+                 "teamVersionWithdrawals":[{"workspaceId":%1$d,"versionId":"%2$s"},{"workspaceId":%1$d,"versionId":"%3$s"},{"workspaceId":%4$d,"versionId":"%5$s"}],
+                 "workspaceDepartures":[{"workspaceId":%1$d,"accountId":%6$d}]}
+                """.formatted(course, listed, expired, other, kept, departed));
+        var processing = new AtomicBoolean();
+        try (var context = context(manifest, processing)) {
+            context.refresh();
+            assertThat(processing).isTrue();
+        }
+
+        assertThat(versionState(course, listed)).isEqualTo("WITHDRAWN");
+        assertThat(versionState(course, left)).isEqualTo("WITHDRAWN");
+        // A version that another workspace names, that expired, or that nothing lists keeps its state.
+        assertThat(versionState(course, kept)).isEqualTo("AVAILABLE");
+        assertThat(versionState(course, expired)).isEqualTo("EXPIRED");
+        assertThat(versionState(other, elsewhere)).isEqualTo("AVAILABLE");
+    }
+
+    private Workspace workspace(String slug) {
+        return beans.getBean(WorkspaceRepository.class)
+                .save(WorkspaceTestFixtures.activeWorkspace(
+                        slug + "-" + UUID.randomUUID().toString().substring(0, 8)));
+    }
+
+    private long account(String name) {
+        return Objects.requireNonNull(
+                accounts.saveAndFlush(new Account(name)).getId());
+    }
+
+    /** A new version in a new team of the workspace, written as a submission writes it. */
+    private UUID teamVersion(long workspace, long account) {
+        UUID team = UUID.randomUUID();
+        UUID version = UUID.randomUUID();
+        jdbc.update(
+                "INSERT INTO project_team(id, workspace_id, name, created_at) VALUES (?, ?, ?, now())",
+                team,
+                workspace,
+                team.toString());
+        jdbc.update(
+                "INSERT INTO project_team_member(id, workspace_id, team_id, account_id, joined_at)"
+                        + " VALUES (gen_random_uuid(), ?, ?, ?, now())",
+                workspace,
+                team,
+                account);
+        Long item = jdbc.queryForObject(
+                "INSERT INTO team_item(workspace_id, team_id, kind, created_at)"
+                        + " VALUES (?, ?, 'team.board', now()) RETURNING id",
+                Long.class,
+                workspace,
+                team);
+        jdbc.update(
+                "INSERT INTO team_item_version(id, workspace_id, item_id, sequence_number, submitted_by, submitted_at,"
+                        + " request_key, state, expires_at) VALUES (?, ?, ?, 1, ?, now(), gen_random_uuid(),"
+                        + " 'AVAILABLE', now() + interval '30 days')",
+                version,
+                workspace,
+                item,
+                account);
+        return version;
+    }
+
+    private @Nullable String versionState(long workspace, UUID version) {
+        return jdbc.queryForObject(
+                "SELECT state FROM team_item_version WHERE id = ? AND workspace_id = ?",
+                String.class,
+                version,
+                workspace);
+    }
+
+    @Test
     void shouldExportAndEraseThePublicationForTheExactUnlinkedSlackSubject() {
         var subject = new PersonIdentity(19, "UMEMBER", "TRECOVERY");
         var person = new PersonScope(null, List.of(subject), List.of());
@@ -221,7 +319,9 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                 List.of(),
                 List.of(),
                 List.of(),
-                List.of())));
+                List.of(),
+                null,
+                null)));
         var processing = new AtomicBoolean();
         try (var context = context(manifest, processing, recoveryService)) {
             assertThatThrownBy(context::refresh).hasStackTraceContaining("Erasure recovery is incomplete");
@@ -279,7 +379,9 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                 List.of(),
                 List.of(),
                 List.of(),
-                List.of())));
+                List.of(),
+                null,
+                null)));
         var journal = new RecordingPrivacyJournal();
         var recordingService = advisedService(
                 beans.getBean(PersonDataRegistry.class),
@@ -391,7 +493,9 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                 List.of(),
                 List.of(),
                 List.of(),
-                List.of())));
+                List.of(),
+                null,
+                null)));
         var processing = new AtomicBoolean();
         try (var context = context(manifest, processing)) {
             context.refresh();
@@ -556,6 +660,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                         beans.getBean(RestoredCollectionErasures.class),
                         beans.getBean(RestoredSlackMessageChanges.class),
                         beans.getBean(RestoredSlackChannelErasures.class),
+                        beans.getBean(RestoredTeamWork.class),
                         new PersonDataRecoveryProperties(manifest.toString())));
         context.registerBean("processing", SmartLifecycle.class, () -> new SmartLifecycle() {
             @Override

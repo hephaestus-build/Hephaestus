@@ -34,7 +34,8 @@ public enum PrivacyJournalKind {
     RESEARCH_REMOVAL_RECORDED("datasetId", "rowKeys", "removedAt"),
     RESEARCH_MAPPING_ERASED("datasetId", "closure", "closedAt"),
     EXPERIMENT_WITHDRAWN("experimentId", "enrolmentId"),
-    EXPERIMENT_KEY_DESTROYED("experimentId");
+    EXPERIMENT_KEY_DESTROYED("experimentId"),
+    TEAM_VERSION_WITHDRAWN("workspaceId", "versionId");
 
     private final String requiredReferences;
 
