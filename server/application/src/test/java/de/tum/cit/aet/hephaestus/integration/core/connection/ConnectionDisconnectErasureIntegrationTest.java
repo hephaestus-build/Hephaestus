@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.MockSecurityContextUtils;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
+import de.tum.cit.aet.hephaestus.testconfig.ScheduledLocks;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -313,8 +314,7 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
                 Timestamp.from(Instant.now().minus(Duration.ofHours(25))),
                 workspace.getId(),
                 current.getId());
-        jdbcTemplate.update(
-                "UPDATE shedlock SET lock_until = TIMESTAMP '1970-01-01' WHERE name = 'provider-teardown-expiry'");
+        ScheduledLocks.free(jdbcTemplate, ProviderTeardown.class, "expire");
         expiry.expire();
         expiry.on(new ProviderTeardownRequested(current.getId(), workspace.getId(), generation));
         assertThat(ownedRepairCount()).isZero();

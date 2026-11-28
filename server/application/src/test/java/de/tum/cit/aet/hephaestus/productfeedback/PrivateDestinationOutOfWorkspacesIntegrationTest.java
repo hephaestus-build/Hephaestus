@@ -41,6 +41,7 @@ import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackRequestDTO
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.UpdateProductFeedbackDestinationsDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.metrics.ProductFeedbackMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.ScheduledLocks;
 import de.tum.cit.aet.hephaestus.testconfig.StubInstallationRepositoryEnumerator;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
@@ -366,7 +367,9 @@ class PrivateDestinationOutOfWorkspacesIntegrationTest extends BaseIntegrationTe
         destinationRows.save(destination);
         assertThat(monitorsOf(PRIVATE)).isEqualTo(2);
 
+        ScheduledLocks.free(jdbc, DestinationService.class, "keepPrivateRepositoryOutOfWorkspaces");
         destinations.keepPrivateRepositoryOutOfWorkspaces();
+        ScheduledLocks.free(jdbc, DestinationService.class, "keepPrivateRepositoryOutOfWorkspaces");
         destinations.keepPrivateRepositoryOutOfWorkspaces();
 
         assertThat(monitorsOf(PRIVATE)).isZero();
@@ -394,7 +397,9 @@ class PrivateDestinationOutOfWorkspacesIntegrationTest extends BaseIntegrationTe
         save(PRIVATE);
         var after = rowCounts();
 
+        ScheduledLocks.free(jdbc, DestinationService.class, "keepPrivateRepositoryOutOfWorkspaces");
         destinations.keepPrivateRepositoryOutOfWorkspaces();
+        ScheduledLocks.free(jdbc, DestinationService.class, "keepPrivateRepositoryOutOfWorkspaces");
         destinations.keepPrivateRepositoryOutOfWorkspaces();
 
         assertThat(rowCounts()).isEqualTo(after);
@@ -484,6 +489,7 @@ class PrivateDestinationOutOfWorkspacesIntegrationTest extends BaseIntegrationTe
 
         save(PRIVATE);
         assertThat(number("SELECT COUNT(*) FROM issue WHERE id = 91")).isZero();
+        ScheduledLocks.free(jdbc, FollowService.class, "followDue");
         follow.followDue();
 
         var seen = reports.mine(reporter, false).stream()

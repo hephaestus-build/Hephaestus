@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClie
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookInfo;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
+import de.tum.cit.aet.hephaestus.testconfig.ScheduledLocks;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.util.Set;
@@ -292,20 +293,13 @@ class GitLabSuspendedWebhookCleanupIntegrationTest extends BaseIntegrationTest {
     }
 
     private void reconcile() {
-        releaseScheduledLeases();
+        ScheduledLocks.free(jdbc, GitLabSuspendedWebhookCleanup.class, "reconcile");
         cleanup.reconcile();
         jdbc.update("UPDATE provider_resource_repair SET next_attempt_at = TIMESTAMP '1970-01-01' WHERE id IN "
                 + "(SELECT repair_id FROM connection_provider_repair r JOIN connection c ON c.id = r.connection_id "
                 + "WHERE c.kind = 'GITLAB' AND c.config ->> 'serverUrl' = 'https://gitlab.example')");
-        jdbc.update("UPDATE shedlock SET lock_until = TIMESTAMP '1970-01-01' WHERE name = 'provider-resource-repair'");
+        ScheduledLocks.free(jdbc, ProviderResourceRepairDispatcher.class, "reconcile");
         dispatcher.reconcile();
-    }
-
-    @AfterEach
-    void releaseScheduledLeases() {
-        jdbc.update(
-                "UPDATE shedlock SET lock_until = TIMESTAMP '1970-01-01 00:00:00' WHERE name = ?",
-                GitLabSuspendedWebhookCleanup.LOCK_NAME);
     }
 
     @AfterEach

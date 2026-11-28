@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
+import de.tum.cit.aet.hephaestus.testconfig.ScheduledLocks;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -269,6 +270,7 @@ class ReviewClosureIntegrationTest extends AbstractResultAdmissionIntegrationTes
                 .when(runtime)
                 .activeJobIds(
                         pending.review().getWorkspaceId(), pending.review().getId());
+        ScheduledLocks.free(jdbc, ReviewJobCompletionService.class, "tick");
         completion.tick();
 
         assertClosedWithheld(pending, "CANCELLED");

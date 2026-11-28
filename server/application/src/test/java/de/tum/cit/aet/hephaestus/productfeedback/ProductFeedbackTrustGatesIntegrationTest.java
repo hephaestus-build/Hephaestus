@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.UpdateProductFeedbac
 import de.tum.cit.aet.hephaestus.productfeedback.adapter.ProductfeedbackPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.productfeedback.metrics.ProductFeedbackMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.RunningMigration;
+import de.tum.cit.aet.hephaestus.testconfig.ScheduledLocks;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.Timestamp;
 import java.time.Clock;
@@ -454,8 +455,8 @@ class ProductFeedbackTrustGatesIntegrationTest extends AbstractProductFeedbackFi
                         PUBLIC_REPOSITORY.installationId(),
                         true)));
 
-        AopTestUtils.<DestinationService>getUltimateTargetObject(destinationService)
-                .refreshSnapshot();
+        ScheduledLocks.free(jdbc, DestinationService.class, "refreshSnapshot");
+        destinationService.refreshSnapshot();
 
         assertThat(destination().getSnapshot()).isNull();
         assertThat(destination().getSnapshotAt()).isNull();
@@ -1015,8 +1016,8 @@ class ProductFeedbackTrustGatesIntegrationTest extends AbstractProductFeedbackFi
                         List.of(new ProductFeedbackIssues.Comment(
                                 commentId, "maintainer", false, "/publish", Instant.now())),
                         null)));
-        // Past the scheduler lock, which skips a second run within its minimum hold.
-        AopTestUtils.<FollowService>getUltimateTargetObject(follow).followDue();
+        ScheduledLocks.free(jdbc, FollowService.class, "followDue");
+        follow.followDue();
         assertThat(filings.findById(id).orElseThrow().getPublishRequestedBy()).isEqualTo("maintainer");
     }
 
