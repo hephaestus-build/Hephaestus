@@ -77,6 +77,8 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
      * {@code pull_request_requested_reviewers} carry a {@code user_id} and are mapped.
      */
     private static final Set<String> NOT_PERSONAL_DATA = Set.of(
+            // A team, a repository item and a time. The admin audit, not this table, records who mapped it.
+            "project_team_repository",
             // Scoped authorization reference, no provider identifier or local person; workspace purge cascades it.
             "connection_provider_repair",
             // The queue points at a commit and holds no email and no user.
